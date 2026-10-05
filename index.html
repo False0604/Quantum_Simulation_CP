@@ -96,6 +96,16 @@ input[type=range]:disabled{opacity:.35}
 select{width:100%;font:13px var(--sans);padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);color:var(--ink)}
 .mini-btn{appearance:none;border:1px solid var(--line-2);background:var(--surface-2);font:500 12.5px var(--sans);padding:8px 12px;border-radius:9px;cursor:pointer;width:100%;color:var(--ink)}
 .mini-btn:hover{border-color:var(--ink)}
+.row-inline{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:12.5px;color:var(--ink-2)}
+.row-inline input{width:64px;font:13px var(--mono);padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);color:var(--ink)}
+.row-inline .hint{margin:0}
+.viewbar{display:flex;flex-wrap:wrap;align-items:center;gap:14px 20px}
+.viewbar .seg{min-width:200px}
+.card.wide:has(.viewbar){padding:14px 22px}
+.xcheck{margin-top:10px;font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;line-height:1.5}
+.xcheck .ok{color:var(--good);font-weight:600}
+.xcheck .bad{color:var(--attack);font-weight:600}
+.warn{display:block;margin-top:8px;font-size:12px;color:var(--quantum-deep)}
 .status{margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:8px;min-height:16px}
 .status i{width:6px;height:6px;border-radius:50%;background:var(--good)}
 .status.busy i{background:var(--quantum);animation:pulse 1s infinite}
@@ -280,6 +290,14 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
           <div class="ctl">
             <label class="t">Seeds averaged</label>
             <div class="seg" data-key="seeds"><button data-v="1">1 seed</button><button data-v="3">3 seeds</button><button data-v="5">5 seeds</button></div>
+            <div class="row-inline"><label for="seedStart">First seed</label><input id="seedStart" type="number" min="0" max="999" step="1" value="0"><span class="hint" id="seedList">seeds 0, 1, 2</span></div>
+          </div>
+          <div class="ctl">
+            <label class="t" for="nu">One-class SVM ν <span id="nuV">0.10</span></label>
+            <input id="nu" type="range" min="0.05" max="0.5" step="0.05" value="0.1">
+            <label class="t" style="margin-top:12px">Autoencoder L2 weight decay</label>
+            <div class="seg" data-key="wd"><button data-v="0">0</button><button data-v="0.0001">1e-4</button><button data-v="0.001">1e-3</button><button data-v="0.01">1e-2</button></div>
+            <div class="hint">Regularisation. ν bounds the share of training rows allowed outside the boundary; it is shared by the RBF and quantum SVMs (the "ν = 0.3" variant stays at 0.3). Paper settings: ν = 0.1, no weight decay.</div>
           </div>
           <div class="ctl">
             <label class="t" for="noise">Depolarising noise p <span id="noiseV">0.00</span></label>
@@ -315,10 +333,19 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
             <div class="chart-note">ROC-AUC, mean ± one standard deviation across seeds. The dashed line marks chance (0.5).</div>
           </div>
 
+          <div class="panel card wide">
+            <div class="viewbar">
+              <span class="eyebrow">Seed shown below</span>
+              <div class="seg" id="viewSeg"></div>
+              <label class="switch" style="margin:0"><input type="checkbox" id="allSeeds"> Overlay every seed and the mean ROC</label>
+            </div>
+          </div>
+
           <div class="panel card">
             <h3>ROC curve</h3>
-            <p class="sub" id="rocSub">Seed 0, focus detector against the strongest opponent.</p>
+            <p class="sub" id="rocSub"></p>
             <div id="roc"></div>
+            <div class="xcheck" id="xcheck"></div>
           </div>
 
           <div class="panel card">
@@ -628,13 +655,13 @@ const Engine = (() => {
   // ---------- classical detectors ----------
   const sqd = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2; return s; };
 
-  function rbfOCSVM(Xtr) {
+  function rbfOCSVM(Xtr, nu = 0.1) {
     const k = Xtr[0].length, all = Xtr.flat(), m = all.reduce((s, v) => s + v, 0) / all.length;
     const variance = all.reduce((s, v) => s + (v - m) ** 2, 0) / all.length;
     const gamma = 1 / (k * variance);
     const kern = (a, b) => Math.exp(-gamma * sqd(a, b));
     const K = Xtr.map(a => Xtr.map(b => kern(a, b)));
-    const m1 = ocsvm(K, 0.1);
+    const m1 = ocsvm(K, nu);
     const score = X => X.map(x => m1.score(Xtr.map(t => kern(x, t))));
     return { score, threshold: 0, K, kern };
   }
@@ -671,7 +698,7 @@ const Engine = (() => {
     return { score, threshold: 1.5 };
   }
 
-  function autoencoder(Xtr, seed) {
+  function autoencoder(Xtr, seed, wd = 0) {
     const r = rng(900 + seed), k = Xtr[0].length, b = Math.min(3, k - 1);
     const sizes = [k, 8, b, 8, k];
     const L = sizes.length - 1;
@@ -710,7 +737,7 @@ const Engine = (() => {
         for (let l = 0; l < L; l++) {
           for (let o = 0; o < W[l].length; o++) {
             for (let i = 0; i < W[l][o].length; i++) {
-              const g = gW[l][o][i];
+              const g = gW[l][o][i] + wd * W[l][o][i];
               mW[l][o][i] = b1 * mW[l][o][i] + (1 - b1) * g; vW[l][o][i] = b2c * vW[l][o][i] + (1 - b2c) * g * g;
               W[l][o][i] -= (lr * mW[l][o][i] / (1 - b1 ** step)) / (Math.sqrt(vW[l][o][i] / (1 - b2c ** step)) + 1e-8);
             }
@@ -787,7 +814,7 @@ const Engine = (() => {
     { id: 'zonly', label: 'Z-only, angle', reps: 1, enc: 'angle', nu: 0.1, noEnt: true },
     { id: 'zznoang', label: 'ZZ, no angle', reps: 1, enc: 'raw', nu: 0.1 },
     { id: 'zzang', label: 'ZZ, angle', reps: 1, enc: 'angle', nu: 0.1 },
-    { id: 'zznu', label: 'ZZ, angle, ν = 0.3', reps: 1, enc: 'angle', nu: 0.3 },
+    { id: 'zznu', label: 'ZZ, angle, ν = 0.3', reps: 1, enc: 'angle', fixedNu: 0.3 },
   ];
 
   // median heuristic on benign training rows only: choose lambda so the median off-diagonal kernel value is about 0.5
@@ -826,7 +853,7 @@ const Engine = (() => {
     const noisy = f => (1 - p) * (1 - p) * f + (2 * (1 - p) * p) / dim + (p * p) / dim;
     const refStates = encode(Xtr).map(stateOf);
     const K = refStates.map(a => refStates.map(b => noisy(fidelity(a, b))));
-    const model = ocsvm(K, cfg.nu);
+    const model = ocsvm(K, cfg.fixedNu || opts.nu || 0.1);
     const score = X => encode(X).map(stateOf).map(s => model.score(refStates.map(rs => noisy(fidelity(s, rs)))));
     return { score, threshold: 0, K, lambdaUsed, trainLog };
   }
@@ -839,10 +866,10 @@ const Engine = (() => {
   }
 
   const CLASSICAL = [
-    { id: 'ae', label: 'Autoencoder', make: (X, s) => autoencoder(X, s) },
+    { id: 'ae', label: 'Autoencoder', make: (X, s, o) => autoencoder(X, s, o.wd || 0) },
     { id: 'lof', label: 'LOF', make: X => lof(X) },
     { id: 'if', label: 'Isolation Forest', make: (X, s) => isolationForest(X, s) },
-    { id: 'rbf', label: 'RBF OCSVM', make: X => rbfOCSVM(X) },
+    { id: 'rbf', label: 'RBF OCSVM', make: (X, s, o) => rbfOCSVM(X, o.nu || 0.1) },
   ];
 
   const dsCache = {};
@@ -854,8 +881,8 @@ const Engine = (() => {
   // One full run: every detector, every seed, identical inputs per seed
   function run(opts) {
     const ds = dataset(opts.regime, opts.dataSeed || 0);
-    const seeds = range(opts.seeds);
-    const res = {}; const keep = {};
+    const seeds = range(opts.seeds).map(i => (opts.seedStart || 0) + i);
+    const res = {}, runs = [];
     const add = (id, sc, y, thr) => {
       (res[id] = res[id] || { auc: [], ap: [], f1: [] });
       res[id].auc.push(rocAuc(sc, y)); res[id].ap.push(avgPrecision(sc, y)); res[id].f1.push(f1(sc.map(v => v > thr), y));
@@ -865,19 +892,18 @@ const Engine = (() => {
       const sp = split(ds, seed), pre = fitPreprocess(sp.train, opts.k);
       const Xtr = pre.transform(sp.train), Xte = pre.transform(sp.test);
       explained += pre.explained / seeds.length;
-      CLASSICAL.forEach(c => { const m = c.make(Xtr, seed), sc = m.score(Xte); add(c.id, sc, sp.y, m.threshold);
-        if (seed === 0) keep[c.id] = { model: m, scores: sc }; });
-      Q_CONFIGS.forEach(cfg => { const m = quantumDetector(cfg, Xtr, opts, seed), sc = m.score(Xte); add(cfg.id, sc, sp.y, m.threshold);
-        if (seed === 0) keep[cfg.id] = { model: m, scores: sc }; else if (m.lambdaUsed) keep[cfg.id].lambdas = (keep[cfg.id].lambdas || []).concat(m.lambdaUsed); });
-      if (seed === 0) Object.assign(keep, { Xtr, Xte, y: sp.y });
+      const det = {};
+      CLASSICAL.forEach(c => { const m = c.make(Xtr, seed, opts), sc = m.score(Xte); add(c.id, sc, sp.y, m.threshold); det[c.id] = { model: m, scores: sc }; });
+      Q_CONFIGS.forEach(cfg => { const m = quantumDetector(cfg, Xtr, opts, seed), sc = m.score(Xte); add(cfg.id, sc, sp.y, m.threshold); det[cfg.id] = { model: m, scores: sc }; });
+      runs.push({ seed, Xtr, Xte, y: sp.y, det, explained: pre.explained });
     });
     const stat = a => { const m = a.reduce((s, v) => s + v, 0) / a.length; return { mean: m, std: Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / a.length) }; };
     const summary = {};
-    Object.entries(res).forEach(([id, r]) => (summary[id] = { auc: stat(r.auc), ap: stat(r.ap), f1: stat(r.f1) }));
-    return { summary, keep, explained };
+    Object.entries(res).forEach(([id, r]) => (summary[id] = { auc: stat(r.auc), ap: stat(r.ap), f1: stat(r.f1), perSeed: r.auc }));
+    return { summary, runs, explained };
   }
 
-  return { run, rocCurve, effectiveRank, Q_CONFIGS, CLASSICAL, zzState, fidelity, rng };
+  return { run, rocCurve, rocAuc, effectiveRank, Q_CONFIGS, CLASSICAL, zzState, fidelity, rng };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
 
@@ -908,12 +934,13 @@ if (typeof module !== 'undefined') module.exports = Engine;
   const isQ = id => Engine.Q_CONFIGS.some(q => q.id === id);
   const fmt = (v, d = 3) => v.toFixed(d);
 
-  const state = { regime: 'ring', k: 2, seeds: 3, noise: 0, lambdaAuto: true, lambda: 0.2, focus: 'tuned', dataSeed: 0, packets: 100, speed: 1 };
+  const state = { regime: 'ring', k: 2, seeds: 3, seedStart: 0, noise: 0, lambdaAuto: true, lambda: 0.2, nu: 0.1, wd: 0, focus: 'tuned', dataSeed: 0, view: 0, allSeeds: false, packets: 100, speed: 1 };
+  const isPaperSettings = () => state.nu === 0.1 && state.wd === 0;
   let result = null;
 
   // ---------- controls ----------
   function syncSegs() {
-    document.querySelectorAll('.seg').forEach(seg => {
+    document.querySelectorAll('.seg[data-key]').forEach(seg => {
       const key = seg.dataset.key;
       seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(String(state[key]) === b.dataset.v)));
     });
@@ -921,11 +948,11 @@ if (typeof module !== 'undefined') module.exports = Engine;
       ? 'Benign points on a unit circle embedded in 10-D; attacks sit just off it, on a circle of radius 1.6.'
       : '15 correlated features; attack rows copy benign test rows and shift about 60% of features by ±(3.5σ + e).';
   }
-  document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
+  document.querySelectorAll('.seg[data-key]').forEach(seg => seg.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     const key = seg.dataset.key, v = b.dataset.v;
     state[key] = isNaN(+v) ? v : +v; syncSegs();
-    if (['regime', 'k', 'seeds'].includes(key)) schedule();
+    if (['regime', 'k', 'seeds', 'wd'].includes(key)) schedule();
     if (['packets', 'speed'].includes(key)) resetRace();
   }));
   const focusSel = $('#focus');
@@ -940,6 +967,14 @@ if (typeof module !== 'undefined') module.exports = Engine;
   $('#lambdaAuto').addEventListener('change', e => { state.lambdaAuto = e.target.checked; $('#lambda').disabled = state.lambdaAuto; schedule(); });
   $('#lambda').addEventListener('input', e => { state.lambda = +e.target.value; schedule(); });
   $('#redraw').addEventListener('click', () => { state.dataSeed++; schedule(); });
+  $('#nu').addEventListener('input', e => { state.nu = Math.round(+e.target.value * 100) / 100; $('#nuV').textContent = state.nu.toFixed(2); schedule(); });
+  $('#seedStart').addEventListener('change', e => { state.seedStart = Math.max(0, Math.min(999, Math.round(+e.target.value) || 0)); e.target.value = state.seedStart; schedule(); });
+  $('#allSeeds').addEventListener('change', e => { state.allSeeds = e.target.checked; renderROC(); });
+  $('#viewSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; state.view = +b.dataset.v; renderViewSeg(); renderFocus(); });
+  function renderViewSeg() {
+    const seg = $('#viewSeg'); seg.innerHTML = '';
+    result.runs.forEach((r, i) => { const b = document.createElement('button'); b.dataset.v = i; b.textContent = 'seed ' + r.seed; b.setAttribute('aria-pressed', String(i === state.view)); seg.appendChild(b); });
+  }
 
   let timer = null;
   function schedule() {
@@ -949,14 +984,16 @@ if (typeof module !== 'undefined') module.exports = Engine;
   }
   function compute() {
     const t0 = performance.now();
-    result = Engine.run({ regime: state.regime, k: state.k, seeds: state.seeds, noise: state.noise, lambdaAuto: state.lambdaAuto, lambda: state.lambda, dataSeed: state.dataSeed });
+    result = Engine.run({ regime: state.regime, k: state.k, seeds: state.seeds, seedStart: state.seedStart, noise: state.noise, lambdaAuto: state.lambdaAuto, lambda: state.lambda, nu: state.nu, wd: state.wd, dataSeed: state.dataSeed });
+    state.view = Math.min(state.view, result.runs.length - 1);
+    $('#seedList').textContent = 'seeds ' + result.runs.map(r => r.seed).join(', ');
     const ms = Math.round(performance.now() - t0);
     const st = $('#status'); st.classList.remove('busy');
     st.querySelector('span').textContent = `${state.seeds} seed${state.seeds > 1 ? 's' : ''} × 11 detectors in ${ms} ms · data draw #${state.dataSeed}`;
-    const lam = result.keep.tuned.model.lambdaUsed;
+    const lam = result.runs[0].det.tuned.model.lambdaUsed;
     $('#lambdaV').textContent = state.lambdaAuto ? `auto → ${lam.toFixed(3)}` : lam.toFixed(2);
     if (state.lambdaAuto) $('#lambda').value = lam;
-    renderAll();
+    renderViewSeg(); renderAll();
   }
 
   // ---------- helpers ----------
@@ -1021,27 +1058,64 @@ if (typeof module !== 'undefined') module.exports = Engine;
   function renderFocus() { renderROC(); renderMap(); renderGram(); }
 
   function renderROC() {
-    const k = result.keep, f = state.focus;
+    const runs = result.runs, R = runs[state.view], f = state.focus;
     const oppIds = isQ(f) ? Engine.CLASSICAL.map(c => c.id) : Engine.Q_CONFIGS.map(q => q.id);
     const opp = best(oppIds).id;
-    const S = 300, p = 34, svg = el('svg', { viewBox: `0 0 ${S + p + 10} ${S + p + 10}`, width: '100%', role: 'img', 'aria-label': 'ROC curves' });
-    const X = v => p + v * S, Y = v => 10 + (1 - v) * S;
-    [0, .25, .5, .75, 1].forEach(t => {
-      svg.appendChild(el('line', { x1: X(t), x2: X(t), y1: Y(0), y2: Y(1), stroke: C.line }));
-      svg.appendChild(el('line', { x1: X(0), x2: X(1), y1: Y(t), y2: Y(t), stroke: C.line }));
-      svg.appendChild(el('text', { x: X(t), y: Y(0) + 16, 'text-anchor': 'middle', 'font-size': 11.5, fill: C.muted, 'font-family': 'Geist Mono, monospace' }, t));
-      svg.appendChild(el('text', { x: p - 6, y: Y(t) + 3, 'text-anchor': 'end', 'font-size': 11.5, fill: C.muted, 'font-family': 'Geist Mono, monospace' }, t));
+    const fCol = isQ(f) ? C.qDeep : C.clsDeep, oCol = isQ(opp) ? C.q : C.cls;
+    const S = 300, L = 50, T = 12, Bm = 46, Rm = 12;
+    const svg = el('svg', { viewBox: `0 0 ${L + S + Rm} ${T + S + Bm}`, width: '100%', role: 'img', 'aria-label': 'ROC curves' });
+    const X = v => L + v * S, Y = v => T + (1 - v) * S;
+    svg.appendChild(el('rect', { x: X(0), y: Y(1), width: S, height: S, fill: '#FDFCF9', stroke: C.line }));
+    [.25, .5, .75].forEach(v => {
+      svg.appendChild(el('line', { x1: X(v), x2: X(v), y1: Y(0), y2: Y(1), stroke: C.line, 'stroke-width': .8 }));
+      svg.appendChild(el('line', { x1: X(0), x2: X(1), y1: Y(v), y2: Y(v), stroke: C.line, 'stroke-width': .8 }));
     });
-    svg.appendChild(el('line', { x1: X(0), y1: Y(0), x2: X(1), y2: Y(1), stroke: C.muted, 'stroke-dasharray': '4 4' }));
-    const curve = (id, color, w) => {
-      const pts = Engine.rocCurve(k[id].scores, k.y);
-      svg.appendChild(el('polyline', { points: pts.map(([a, b]) => `${X(a)},${Y(b)}`).join(' '), fill: 'none', stroke: color, 'stroke-width': w, 'stroke-linejoin': 'round' }));
+    [0, .25, .5, .75, 1].forEach(v => {
+      svg.appendChild(el('text', { x: X(v), y: Y(0) + 15, 'text-anchor': 'middle', 'font-size': 11, fill: C.muted, 'font-family': 'Geist Mono, monospace' }, v));
+      svg.appendChild(el('text', { x: L - 7, y: Y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: C.muted, 'font-family': 'Geist Mono, monospace' }, v));
+    });
+    svg.appendChild(el('text', { x: X(.5), y: T + S + 38, 'text-anchor': 'middle', 'font-size': 12, fill: C.ink2 }, 'False positive rate (benign rows flagged)'));
+    const yt = el('text', { x: 0, y: 0, 'text-anchor': 'middle', 'font-size': 12, fill: C.ink2, transform: `translate(14 ${Y(.5)}) rotate(-90)` }, 'True positive rate (attacks caught)');
+    svg.appendChild(yt);
+    svg.appendChild(el('line', { x1: X(0), y1: Y(0), x2: X(1), y2: Y(1), stroke: C.muted, 'stroke-dasharray': '3 4' }));
+    svg.appendChild(el('text', { x: X(.62), y: Y(.55), 'font-size': 10.5, fill: C.muted, transform: `rotate(-45 ${X(.62)} ${Y(.55)})` }, 'chance'));
+
+    const path = (pts, attrs) => svg.appendChild(el('polyline', Object.assign({ points: pts.map(([a, b]) => `${X(a)},${Y(b)}`).join(' '), fill: 'none', 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, attrs)));
+    const curveOf = (run, id) => Engine.rocCurve(run.det[id].scores, run.y);
+    const meanCurve = id => { // vertical averaging on a fixed FPR grid
+      const cs = runs.map(r => curveOf(r, id)), pts = [];
+      for (let g = 0; g <= 100; g++) { const fpr = g / 100; const tprs = cs.map(c => { let m = 0; c.forEach(([a, b]) => { if (a <= fpr + 1e-12) m = Math.max(m, b); }); return m; }); pts.push([fpr, tprs.reduce((s, v) => s + v, 0) / tprs.length]); }
+      return [[0, 0]].concat(pts);
     };
-    curve(opp, isQ(opp) ? C.q : C.cls, 1.6);
-    curve(f, isQ(f) ? C.qDeep : C.clsDeep, 2.6);
+    const trap = pts => { let s = 0; for (let i = 1; i < pts.length; i++) s += (pts[i][0] - pts[i - 1][0]) * (pts[i][1] + pts[i - 1][1]) / 2; return s; };
+
+    let fPts, oPts, label;
+    if (state.allSeeds && runs.length > 1) {
+      runs.forEach(r => path(curveOf(r, f), { stroke: fCol, 'stroke-width': 1.1, opacity: .28 }));
+      fPts = meanCurve(f); oPts = meanCurve(opp); label = `mean of ${runs.length} seeds`;
+    } else { fPts = curveOf(R, f); oPts = curveOf(R, opp); label = `seed ${R.seed}`; }
+    path(fPts, { stroke: fCol, 'stroke-width': 3 });
+    path(oPts, { stroke: oCol, 'stroke-width': 1.8, 'stroke-dasharray': '6 4' });
+
+    const fA = trap(fPts), oA = trap(oPts);
+    const lg = el('g', { transform: `translate(${X(.36)} ${Y(.2)})` });
+    lg.appendChild(el('rect', { x: -8, y: -14, width: S * .64 + 2, height: 44, rx: 6, fill: 'rgba(255,255,255,.92)', stroke: C.line }));
+    lg.appendChild(el('line', { x1: 0, x2: 18, y1: -3, y2: -3, stroke: fCol, 'stroke-width': 3 }));
+    lg.appendChild(el('text', { x: 24, y: 1, 'font-size': 11, fill: C.ink }, `${NAMES[f]} · ${fmt(fA)}`));
+    lg.appendChild(el('line', { x1: 0, x2: 18, y1: 15, y2: 15, stroke: oCol, 'stroke-width': 1.8, 'stroke-dasharray': '6 4' }));
+    lg.appendChild(el('text', { x: 24, y: 19, 'font-size': 11, fill: C.ink }, `${NAMES[opp]} · ${fmt(oA)}`));
+    svg.appendChild(lg);
+    if (fA > 0.9995) svg.appendChild(el('text', { x: X(.04), y: Y(.93), 'font-size': 10.5, fill: fCol }, 'perfect: up the left edge, along the top'));
+
     const box = $('#roc'); box.innerHTML = ''; box.appendChild(svg);
-    const auc = id => { const pts = Engine.rocCurve(k[id].scores, k.y); let a = 0; for (let i = 1; i < pts.length; i++) a += (pts[i][0] - pts[i - 1][0]) * (pts[i][1] + pts[i - 1][1]) / 2; return a; };
-    $('#rocSub').innerHTML = `Seed 0. <b style="color:${isQ(f) ? C.qDeep : C.clsDeep}">${NAMES[f]}</b> (${fmt(auc(f))}) against <span style="color:${isQ(opp) ? C.q : C.cls}">${NAMES[opp]}</span> (${fmt(auc(opp))}).`;
+    $('#rocSub').innerHTML = `${label[0].toUpperCase() + label.slice(1)}. <b style="color:${fCol}">${NAMES[f]}</b> (solid) against the strongest ${isQ(f) ? 'classical detector' : 'quantum kernel'}, <span style="color:${oCol}">${NAMES[opp]}</span> (dashed). Each step up is an attack ranked above the next benign row.`;
+
+    // cross-check: area under the plotted curve vs the rank-based ROC-AUC that feeds the bars
+    const per = result.summary[f].perSeed, idx = state.view;
+    const rankA = Engine.rocAuc(R.det[f].scores, R.y), areaA = trap(curveOf(R, f));
+    const ok = Math.abs(rankA - areaA) < 1e-9 && Math.abs(per[idx] - rankA) < 1e-12;
+    const mean = per.reduce((s, v) => s + v, 0) / per.length;
+    $('#xcheck').innerHTML = `<span class="${ok ? 'ok' : 'bad'}">${ok ? '✓ Cross-check passed' : '✗ Mismatch'}</span> for ${NAMES[f]}, seed ${R.seed}: area under the plotted curve <span class="mono">${areaA.toFixed(4)}</span>, rank-based ROC-AUC <span class="mono">${rankA.toFixed(4)}</span>. Per-seed values <span class="mono">${per.map(v => v.toFixed(3)).join(' / ')}</span> average to <span class="mono">${mean.toFixed(3)}</span>, the value in the bar chart.` + (state.allSeeds && runs.length > 1 ? ` The mean curve's area (${fA.toFixed(3)}) can differ slightly from that average because curves are averaged point by point.` : '');
   }
 
   function lerp(a, b, t) { return a + (b - a) * t; }
@@ -1052,7 +1126,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
   }
 
   function renderMap() {
-    const k = result.keep, f = state.focus, m = k[f].model;
+    const k = result.runs[state.view], f = state.focus, m = k.det[f].model;
     const pts = k.Xtr.concat(k.Xte);
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     pts.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
@@ -1084,7 +1158,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
       if (k.y[i]) { ctx.strokeStyle = C.attack; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(a - 4, b - 4); ctx.lineTo(a + 4, b + 4); ctx.moveTo(a + 4, b - 4); ctx.lineTo(a - 4, b + 4); ctx.stroke(); }
       else { ctx.fillStyle = '#fff'; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(a, b, 3.8, 0, 7); ctx.fill(); ctx.stroke(); }
     });
-    $('#mapSub').textContent = `${NAMES[f]}, seed 0. Darker means more anomalous.` + (state.k > 2 ? ' Slice through PC3 = PC4 = 0; points are projected.' : '');
+    $('#mapSub').textContent = `${NAMES[f]}, seed ${k.seed}. Darker means more anomalous.` + (state.k > 2 ? ' Slice through PC3 = PC4 = 0; points are projected.' : '');
   }
 
   function drawGram(cv, K, stops) {
@@ -1094,8 +1168,8 @@ if (typeof module !== 'undefined') module.exports = Engine;
   }
   function offDiag(K) { const v = []; for (let i = 0; i < K.length; i++) for (let j = i + 1; j < K.length; j++) v.push(K[i][j]); const m = v.reduce((s, a) => s + a, 0) / v.length; return { m, sd: Math.sqrt(v.reduce((s, a) => s + (a - m) ** 2, 0) / v.length) }; }
   function renderGram() {
-    const k = result.keep, qid = isQ(state.focus) ? state.focus : 'tuned';
-    const Kc = k.rbf.model.K, Kq = k[qid].model.K;
+    const k = result.runs[state.view], qid = isQ(state.focus) ? state.focus : 'tuned';
+    const Kc = k.det.rbf.model.K, Kq = k.det[qid].model.K;
     drawGram($('#gramC'), Kc, ['#FDFBF7', '#DCE6F7', '#7FA6E3', '#2B6BCF', '#0E2A55']);
     drawGram($('#gramQ'), Kq, ['#FDFBF7', '#FBE2D4', '#EE9A6E', '#C24A17', '#5E2209']);
     const sub = K => K.slice(0, 50).map(r => r.slice(0, 50));
@@ -1119,6 +1193,7 @@ if (typeof module !== 'undefined') module.exports = Engine;
     });
     $('#paperSub').textContent = `${state.regime === 'ring' ? 'Ring manifold' : 'Gaussian shift'}, ${state.k} qubits: the paper's ROC-AUC next to this tab's live rerun.`;
     $('#paperSrc').textContent = 'Source: ' + pp.src;
+    if (!isPaperSettings()) $('#paperSrc').innerHTML += `<span class="warn">Regularisation differs from the paper (ν = ${state.nu.toFixed(2)}, weight decay ${state.wd}). Live and paper values are no longer a like-for-like comparison.</span>`;
   }
 
   // ---------- latency ----------

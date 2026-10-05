@@ -165,13 +165,13 @@ const Engine = (() => {
   // ---------- classical detectors ----------
   const sqd = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2; return s; };
 
-  function rbfOCSVM(Xtr) {
+  function rbfOCSVM(Xtr, nu = 0.1) {
     const k = Xtr[0].length, all = Xtr.flat(), m = all.reduce((s, v) => s + v, 0) / all.length;
     const variance = all.reduce((s, v) => s + (v - m) ** 2, 0) / all.length;
     const gamma = 1 / (k * variance);
     const kern = (a, b) => Math.exp(-gamma * sqd(a, b));
     const K = Xtr.map(a => Xtr.map(b => kern(a, b)));
-    const m1 = ocsvm(K, 0.1);
+    const m1 = ocsvm(K, nu);
     const score = X => X.map(x => m1.score(Xtr.map(t => kern(x, t))));
     return { score, threshold: 0, K, kern };
   }
@@ -208,7 +208,7 @@ const Engine = (() => {
     return { score, threshold: 1.5 };
   }
 
-  function autoencoder(Xtr, seed) {
+  function autoencoder(Xtr, seed, wd = 0) {
     const r = rng(900 + seed), k = Xtr[0].length, b = Math.min(3, k - 1);
     const sizes = [k, 8, b, 8, k];
     const L = sizes.length - 1;
@@ -247,7 +247,7 @@ const Engine = (() => {
         for (let l = 0; l < L; l++) {
           for (let o = 0; o < W[l].length; o++) {
             for (let i = 0; i < W[l][o].length; i++) {
-              const g = gW[l][o][i];
+              const g = gW[l][o][i] + wd * W[l][o][i];
               mW[l][o][i] = b1 * mW[l][o][i] + (1 - b1) * g; vW[l][o][i] = b2c * vW[l][o][i] + (1 - b2c) * g * g;
               W[l][o][i] -= (lr * mW[l][o][i] / (1 - b1 ** step)) / (Math.sqrt(vW[l][o][i] / (1 - b2c ** step)) + 1e-8);
             }
@@ -324,7 +324,7 @@ const Engine = (() => {
     { id: 'zonly', label: 'Z-only, angle', reps: 1, enc: 'angle', nu: 0.1, noEnt: true },
     { id: 'zznoang', label: 'ZZ, no angle', reps: 1, enc: 'raw', nu: 0.1 },
     { id: 'zzang', label: 'ZZ, angle', reps: 1, enc: 'angle', nu: 0.1 },
-    { id: 'zznu', label: 'ZZ, angle, ν = 0.3', reps: 1, enc: 'angle', nu: 0.3 },
+    { id: 'zznu', label: 'ZZ, angle, ν = 0.3', reps: 1, enc: 'angle', fixedNu: 0.3 },
   ];
 
   // median heuristic on benign training rows only: choose lambda so the median off-diagonal kernel value is about 0.5
@@ -363,7 +363,7 @@ const Engine = (() => {
     const noisy = f => (1 - p) * (1 - p) * f + (2 * (1 - p) * p) / dim + (p * p) / dim;
     const refStates = encode(Xtr).map(stateOf);
     const K = refStates.map(a => refStates.map(b => noisy(fidelity(a, b))));
-    const model = ocsvm(K, cfg.nu);
+    const model = ocsvm(K, cfg.fixedNu || opts.nu || 0.1);
     const score = X => encode(X).map(stateOf).map(s => model.score(refStates.map(rs => noisy(fidelity(s, rs)))));
     return { score, threshold: 0, K, lambdaUsed, trainLog };
   }
@@ -376,10 +376,10 @@ const Engine = (() => {
   }
 
   const CLASSICAL = [
-    { id: 'ae', label: 'Autoencoder', make: (X, s) => autoencoder(X, s) },
+    { id: 'ae', label: 'Autoencoder', make: (X, s, o) => autoencoder(X, s, o.wd || 0) },
     { id: 'lof', label: 'LOF', make: X => lof(X) },
     { id: 'if', label: 'Isolation Forest', make: (X, s) => isolationForest(X, s) },
-    { id: 'rbf', label: 'RBF OCSVM', make: X => rbfOCSVM(X) },
+    { id: 'rbf', label: 'RBF OCSVM', make: (X, s, o) => rbfOCSVM(X, o.nu || 0.1) },
   ];
 
   const dsCache = {};
@@ -391,8 +391,8 @@ const Engine = (() => {
   // One full run: every detector, every seed, identical inputs per seed
   function run(opts) {
     const ds = dataset(opts.regime, opts.dataSeed || 0);
-    const seeds = range(opts.seeds);
-    const res = {}; const keep = {};
+    const seeds = range(opts.seeds).map(i => (opts.seedStart || 0) + i);
+    const res = {}, runs = [];
     const add = (id, sc, y, thr) => {
       (res[id] = res[id] || { auc: [], ap: [], f1: [] });
       res[id].auc.push(rocAuc(sc, y)); res[id].ap.push(avgPrecision(sc, y)); res[id].f1.push(f1(sc.map(v => v > thr), y));
@@ -402,18 +402,17 @@ const Engine = (() => {
       const sp = split(ds, seed), pre = fitPreprocess(sp.train, opts.k);
       const Xtr = pre.transform(sp.train), Xte = pre.transform(sp.test);
       explained += pre.explained / seeds.length;
-      CLASSICAL.forEach(c => { const m = c.make(Xtr, seed), sc = m.score(Xte); add(c.id, sc, sp.y, m.threshold);
-        if (seed === 0) keep[c.id] = { model: m, scores: sc }; });
-      Q_CONFIGS.forEach(cfg => { const m = quantumDetector(cfg, Xtr, opts, seed), sc = m.score(Xte); add(cfg.id, sc, sp.y, m.threshold);
-        if (seed === 0) keep[cfg.id] = { model: m, scores: sc }; else if (m.lambdaUsed) keep[cfg.id].lambdas = (keep[cfg.id].lambdas || []).concat(m.lambdaUsed); });
-      if (seed === 0) Object.assign(keep, { Xtr, Xte, y: sp.y });
+      const det = {};
+      CLASSICAL.forEach(c => { const m = c.make(Xtr, seed, opts), sc = m.score(Xte); add(c.id, sc, sp.y, m.threshold); det[c.id] = { model: m, scores: sc }; });
+      Q_CONFIGS.forEach(cfg => { const m = quantumDetector(cfg, Xtr, opts, seed), sc = m.score(Xte); add(cfg.id, sc, sp.y, m.threshold); det[cfg.id] = { model: m, scores: sc }; });
+      runs.push({ seed, Xtr, Xte, y: sp.y, det, explained: pre.explained });
     });
     const stat = a => { const m = a.reduce((s, v) => s + v, 0) / a.length; return { mean: m, std: Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / a.length) }; };
     const summary = {};
-    Object.entries(res).forEach(([id, r]) => (summary[id] = { auc: stat(r.auc), ap: stat(r.ap), f1: stat(r.f1) }));
-    return { summary, keep, explained };
+    Object.entries(res).forEach(([id, r]) => (summary[id] = { auc: stat(r.auc), ap: stat(r.ap), f1: stat(r.f1), perSeed: r.auc }));
+    return { summary, runs, explained };
   }
 
-  return { run, rocCurve, effectiveRank, Q_CONFIGS, CLASSICAL, zzState, fidelity, rng };
+  return { run, rocCurve, rocAuc, effectiveRank, Q_CONFIGS, CLASSICAL, zzState, fidelity, rng };
 })();
 if (typeof module !== 'undefined') module.exports = Engine;
