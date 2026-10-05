@@ -1,0 +1,1223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quantum Kernel Lab</title>
+<meta name="description" content="Live, in-browser demonstration of the quantum kernel versus classical anomaly detection benchmark for IoT networks.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F6F3EC; --paper-2:#EFEADF; --surface:#FFFFFF; --surface-2:#FBF9F4;
+  --ink:#1A1915; --ink-2:#47443D; --muted:#8B867B; --line:#E2DCCF; --line-2:#D3CBBA;
+  --classical:#2B6BCF; --classical-soft:#DCE6F7; --classical-deep:#16407F;
+  --quantum:#E2622B; --quantum-soft:#FBE2D4; --quantum-deep:#8F3410;
+  --attack:#9F1239; --good:#2F7D4F;
+  --serif:'Instrument Serif', 'Iowan Old Style', Georgia, serif;
+  --sans:'Geist', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono:'Geist Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+  --radius:14px; --radius-sm:9px;
+  --shadow:0 1px 0 rgba(26,25,21,.04), 0 10px 30px -18px rgba(26,25,21,.25);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15.5px;line-height:1.55;-webkit-font-smoothing:antialiased;
+  background-image:radial-gradient(rgba(26,25,21,.055) 1px, transparent 1px);background-size:22px 22px;background-attachment:fixed}
+a{color:inherit}
+.wrap{max-width:1240px;margin:0 auto;padding:0 32px}
+.mono{font-family:var(--mono);font-feature-settings:"tnum" 1}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:20;background:rgba(246,243,236,.86);backdrop-filter:saturate(1.2) blur(10px);border-bottom:1px solid var(--line)}
+.top .wrap{display:flex;align-items:center;justify-content:space-between;height:58px;gap:16px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:500;letter-spacing:-.01em;text-decoration:none}
+.brand svg{flex:none}
+.brand small{font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:400;letter-spacing:.06em}
+.nav{display:flex;gap:22px;font-size:13.5px;color:var(--ink-2)}
+.nav a{text-decoration:none;padding:4px 0;border-bottom:1px solid transparent;transition:border-color .2s,color .2s}
+.nav a:hover{color:var(--ink);border-color:var(--ink)}
+.live-dot{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2);white-space:nowrap}
+.live-dot i{width:7px;height:7px;border-radius:50%;background:var(--good);box-shadow:0 0 0 4px rgba(47,125,79,.14);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 7px rgba(47,125,79,.04)}}
+
+/* hero */
+.hero{padding:76px 0 56px}
+.hero-grid{display:grid;grid-template-columns:1.12fr .88fr;gap:56px;align-items:end}
+.hero h1{font-family:var(--serif);font-weight:400;font-size:clamp(2.7rem,5.6vw,5.1rem);line-height:.98;letter-spacing:-.015em;margin:18px 0 22px}
+.hero h1 em{font-style:italic;color:var(--quantum-deep)}
+.hero p.lede{font-size:1.08rem;color:var(--ink-2);max-width:34em;margin:0 0 30px}
+.cta-row{display:flex;flex-wrap:wrap;align-items:center;gap:22px}
+.btn{appearance:none;border:1px solid var(--ink);background:var(--ink);color:var(--paper);font:500 14px var(--sans);padding:12px 20px;border-radius:999px;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:10px;transition:transform .15s ease, background .2s}
+.btn:hover{transform:translateY(-1px);background:#000}
+.btn:active{transform:translateY(0) scale(.98)}
+.btn.ghost{background:transparent;color:var(--ink)}
+.btn.ghost:hover{background:var(--ink);color:var(--paper)}
+.link-arrow{font-size:14px;text-decoration:none;border-bottom:1px solid var(--line-2);padding-bottom:2px;color:var(--ink-2)}
+.link-arrow:hover{color:var(--ink);border-color:var(--ink)}
+.hero-figure{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);overflow:hidden;aspect-ratio:1/1;max-height:480px}
+.hero-figure canvas{width:100%;height:100%;display:block}
+.hero-figure figcaption{position:absolute;left:18px;right:18px;bottom:14px;display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.hero-figure .tag{position:absolute;top:16px;left:18px}
+.livestrip{margin-top:44px;display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--line)}
+.livestrip div{padding:16px 18px 16px 0}
+.livestrip div+div{padding-left:18px;border-left:1px solid var(--line)}
+.livestrip .k{font-size:12.5px;color:var(--muted)}
+.livestrip .v{font-family:var(--serif);font-size:2.3rem;line-height:1.05;letter-spacing:-.01em}
+.livestrip .v small{font-family:var(--mono);font-size:12px;color:var(--muted);margin-left:8px;letter-spacing:0}
+.c-classical{color:var(--classical)} .c-quantum{color:var(--quantum)}
+
+/* sections */
+section.block{padding:84px 0 24px}
+.sec-head{display:grid;grid-template-columns:120px 1fr;gap:24px;align-items:start;margin-bottom:34px}
+.sec-num{font-family:var(--mono);font-size:12px;color:var(--muted);padding-top:14px;border-top:1px solid var(--ink)}
+.sec-head h2{font-family:var(--serif);font-weight:400;font-size:clamp(2.1rem,3.6vw,3.1rem);line-height:1.02;margin:0 0 10px;letter-spacing:-.01em}
+.sec-head p{margin:0;color:var(--ink-2);max-width:46em}
+
+/* playground layout */
+.pg{display:grid;grid-template-columns:300px 1fr;gap:28px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+.controls{position:sticky;top:78px;padding:20px 20px 18px;max-height:calc(100vh - 96px);overflow:auto;scrollbar-width:thin}
+.ctl{padding:14px 0;border-bottom:1px solid var(--line)}
+.ctl:first-child{padding-top:2px}
+.ctl:last-child{border-bottom:0;padding-bottom:0}
+.ctl label.t{display:flex;justify-content:space-between;align-items:baseline;font-size:12.5px;font-weight:500;margin-bottom:9px}
+.ctl label.t span{font-family:var(--mono);font-weight:400;color:var(--muted);font-size:11.5px}
+.ctl .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.45}
+.seg{display:flex;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1;appearance:none;border:0;background:transparent;font:500 13px var(--sans);color:var(--ink-2);padding:7px 8px;border-radius:7px;cursor:pointer;transition:background .2s,color .2s,box-shadow .2s}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08),0 0 0 1px var(--line)}
+input[type=range]{width:100%;accent-color:var(--ink);margin:2px 0}
+input[type=range]:disabled{opacity:.35}
+.switch{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--ink-2);cursor:pointer;margin-bottom:10px}
+.switch input{accent-color:var(--quantum);width:15px;height:15px}
+select{width:100%;font:13px var(--sans);padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);color:var(--ink)}
+.mini-btn{appearance:none;border:1px solid var(--line-2);background:var(--surface-2);font:500 12.5px var(--sans);padding:8px 12px;border-radius:9px;cursor:pointer;width:100%;color:var(--ink)}
+.mini-btn:hover{border-color:var(--ink)}
+.status{margin-top:14px;font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:8px;min-height:16px}
+.status i{width:6px;height:6px;border-radius:50%;background:var(--good)}
+.status.busy i{background:var(--quantum);animation:pulse 1s infinite}
+
+.results{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.card{padding:22px 22px 18px}
+.card.wide{grid-column:1 / -1}
+.card h3{font-family:var(--serif);font-weight:400;font-size:1.45rem;margin:0 0 4px;letter-spacing:-.005em}
+.card .sub{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+.headline{font-family:var(--serif);font-size:clamp(1.3rem,2.2vw,1.75rem);line-height:1.25;margin:0 0 18px;max-width:40em}
+.headline b{font-weight:400}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--ink-2);margin-bottom:10px}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.sw{width:12px;height:12px;border-radius:3px;display:inline-block}
+.sw.c{background:var(--classical)} .sw.q{background:var(--quantum)}
+.sw.f{background:repeating-linear-gradient(135deg,var(--quantum) 0 3px,#F5A57F 3px 6px)}
+.sw.p{width:2px;height:14px;background:var(--ink);border-radius:0}
+svg text{font-family:var(--sans)}
+.bars-row{cursor:pointer}
+.bars-row:hover rect.hit{fill:rgba(26,25,21,.035)}
+.chart-note{font-size:12px;color:var(--muted);margin-top:8px}
+.map-wrap{position:relative}
+.map-wrap canvas{width:100%;aspect-ratio:1/1;display:block;border-radius:10px;border:1px solid var(--line)}
+.axis-note{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:6px}
+.gram{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.gram figure{margin:0}
+.gram canvas{width:100%;aspect-ratio:1/1;display:block;border-radius:8px;border:1px solid var(--line);image-rendering:pixelated}
+.gram figcaption{font-size:12px;color:var(--ink-2);margin-top:8px;line-height:1.4}
+.gram figcaption b{font-family:var(--mono);font-weight:500}
+table.ptable{width:100%;border-collapse:collapse;font-size:13px}
+.ptable th{font-weight:500;text-align:left;font-size:11.5px;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;padding:0 8px 8px;border-bottom:1px solid var(--ink)}
+.ptable td{padding:8px;border-bottom:1px solid var(--line)}
+.ptable td.n{font-family:var(--mono);text-align:right;white-space:nowrap}
+.ptable th.n{text-align:right}
+.ptable tr.q td:first-child{color:var(--quantum-deep)}
+.ptable tr.c td:first-child{color:var(--classical-deep)}
+.pill{display:inline-block;font-family:var(--mono);font-size:10px;letter-spacing:.05em;padding:2px 7px;border-radius:999px;background:var(--quantum-soft);color:var(--quantum-deep);margin-left:6px;vertical-align:1px}
+.src{font-size:11.5px;color:var(--muted);margin-top:10px}
+
+/* latency */
+.lat-grid{display:grid;grid-template-columns:.9fr 1.1fr;gap:28px;align-items:start}
+.bignum{font-family:var(--serif);font-size:clamp(5.5rem,13vw,10.5rem);line-height:.82;letter-spacing:-.03em;color:var(--quantum)}
+.bignum small{font-size:.4em;color:var(--ink);letter-spacing:-.01em}
+.lat-copy p{color:var(--ink-2);max-width:30em}
+.race{padding:22px}
+.race-ctl{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-bottom:18px}
+.race-ctl .seg{min-width:190px}
+.race-ctl .seg button{white-space:nowrap;padding:7px 12px}
+.lane{display:grid;grid-template-columns:150px 1fr 118px;gap:14px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line)}
+.lane:last-child{border-bottom:0}
+.lane .nm{font-size:13.5px;font-weight:500}
+.lane .nm small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--muted);font-weight:400}
+.track{position:relative;height:12px;background:var(--paper);border-radius:999px;overflow:hidden;border:1px solid var(--line)}
+.track i{position:absolute;inset:0 auto 0 0;width:0;border-radius:999px}
+.lane.c .track i{background:var(--classical)}
+.lane.q .track i{background:var(--quantum)}
+.lane .ct{font-family:var(--mono);font-size:12px;text-align:right;color:var(--ink-2)}
+.lane .ct b{color:var(--ink);font-weight:500}
+.lane.done .ct b{color:var(--good)}
+.clock{font-family:var(--mono);font-size:12px;color:var(--muted);margin-left:auto}
+
+/* gallery */
+.gal{display:grid;grid-template-columns:1.25fr 1fr;gap:20px}
+.shot{margin:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+.shot img{width:100%;display:block;border-radius:8px;cursor:zoom-in;background:#fff}
+.shot figcaption{font-size:12.5px;color:var(--ink-2);margin-top:10px;display:flex;justify-content:space-between;gap:12px}
+.shot figcaption span:last-child{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.gal-side{display:grid;gap:20px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tabs button{appearance:none;border:1px solid var(--line);background:var(--surface-2);font:500 12.5px var(--sans);padding:7px 12px;border-radius:999px;cursor:pointer;color:var(--ink-2)}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.caveat{display:flex;gap:12px;align-items:flex-start;background:var(--surface-2);border:1px dashed var(--line-2);border-radius:12px;padding:14px 16px;font-size:13px;color:var(--ink-2);margin-bottom:22px}
+.caveat b{color:var(--ink);font-weight:500}
+dialog{border:0;padding:0;border-radius:14px;max-width:min(1200px,94vw);background:#fff;box-shadow:0 30px 80px -20px rgba(0,0,0,.45)}
+dialog::backdrop{background:rgba(26,25,21,.55);backdrop-filter:blur(3px)}
+dialog img{display:block;max-width:100%;max-height:86vh}
+dialog button{position:absolute;top:10px;right:10px}
+
+/* method */
+.method{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.method .card h3{font-size:1.3rem}
+.method ul{margin:8px 0 0;padding-left:18px;color:var(--ink-2);font-size:13.5px}
+.method li{margin:6px 0}
+footer{margin-top:90px;border-top:1px solid var(--ink);padding:26px 0 50px;font-size:12.5px;color:var(--muted)}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
+
+/* reveal */
+.reveal{opacity:0;transform:translateY(14px);transition:opacity .7s ease, transform .7s cubic-bezier(.2,.7,.2,1)}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion: reduce){.reveal{opacity:1;transform:none;transition:none}.live-dot i,.status.busy i{animation:none}}
+
+@media (max-width:1020px){
+  .hero-grid,.lat-grid,.gal{grid-template-columns:1fr}
+  .hero-figure{max-height:none;max-width:520px}
+  .pg{grid-template-columns:1fr}
+  .controls{position:static}
+  .method{grid-template-columns:1fr}
+  .nav{display:none}
+}
+@media (max-width:700px){
+  .wrap{padding:0 16px}
+  .results{grid-template-columns:1fr}
+  .sec-head{grid-template-columns:1fr;gap:10px}
+  .sec-num{width:80px}
+  .livestrip{grid-template-columns:1fr}
+  .livestrip div+div{padding-left:0;border-left:0;border-top:1px solid var(--line)}
+  .lane{grid-template-columns:96px 1fr 92px;gap:10px}
+  .gram{grid-template-columns:1fr 1fr;gap:10px}
+  .hero{padding-top:44px}
+  .brand small{display:none}
+  .live-dot{font-size:0;gap:0}
+  .card{padding:18px 16px 16px}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="6.5" fill="none" stroke="#1A1915" stroke-width="1.4"/><circle cx="13" cy="13" r="11" fill="none" stroke="#E2622B" stroke-width="1.4" stroke-dasharray="2.2 2.6"/><circle cx="13" cy="13" r="1.8" fill="#1A1915"/></svg>
+      Quantum Kernel Lab <small>CP · IoT</small>
+    </a>
+    <nav class="nav" aria-label="Sections">
+      <a href="#playground">Playground</a><a href="#latency">Latency</a><a href="#earlier">Classical run</a><a href="#method">Method</a>
+    </nav>
+    <span class="live-dot"><i></i>computed in your browser</span>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <div class="hero-grid">
+        <div class="reveal">
+          <div class="eyebrow">Conceptual Project I · Quantum kernels for IoT anomaly detection</div>
+          <h1>Can a quantum kernel tell an <em>attack</em> from ordinary traffic?</h1>
+          <p class="lede">A live rerun of our benchmark. Four classical detectors and seven quantum kernel configurations are trained on benign rows only, then scored on the same held-out benign and attack rows. Change the inputs and every number on this page is recomputed.</p>
+          <div class="cta-row">
+            <a class="btn" href="#playground">Open the playground <span aria-hidden="true">↓</span></a>
+            <a class="link-arrow" href="#latency">Watch the latency race →</a>
+          </div>
+        </div>
+        <figure class="hero-figure reveal" aria-label="Ring manifold: benign points on an inner ring, attacks on an outer ring">
+          <span class="tag eyebrow">Ring manifold regime</span>
+          <canvas id="heroCanvas"></canvas>
+          <figcaption><span>● benign, r = 1</span><span style="color:var(--attack)">× attack, r = 1.6</span></figcaption>
+        </figure>
+      </div>
+      <div class="livestrip reveal" aria-live="polite">
+        <div><div class="k">Best classical detector, live</div><div class="v c-classical" id="lsC">…</div></div>
+        <div><div class="k">Best quantum kernel, live</div><div class="v c-quantum" id="lsQ">…</div></div>
+        <div><div class="k">Gap in ROC-AUC</div><div class="v" id="lsG">…</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="playground">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="sec-num">01 / Playground</div>
+        <div>
+          <h2>Detector playground</h2>
+          <p>Synthetic data is generated the way the research brief describes it, split into 80 benign training rows and 50 benign plus 50 attack test rows per seed, standardised and reduced with PCA to one component per qubit. Click any bar to focus the ROC curve, the score map and the kernel view on that detector.</p>
+        </div>
+      </div>
+
+      <div class="pg">
+        <aside class="panel controls" aria-label="Simulation inputs">
+          <div class="ctl">
+            <label class="t">Data regime</label>
+            <div class="seg" data-key="regime">
+              <button data-v="gaussian">Gaussian shift</button>
+              <button data-v="ring">Ring manifold</button>
+            </div>
+            <div class="hint" id="regimeHint"></div>
+          </div>
+          <div class="ctl">
+            <label class="t">Qubits (= PCA components)</label>
+            <div class="seg" data-key="k"><button data-v="2">2 qubits</button><button data-v="4">4 qubits</button></div>
+          </div>
+          <div class="ctl">
+            <label class="t">Seeds averaged</label>
+            <div class="seg" data-key="seeds"><button data-v="1">1 seed</button><button data-v="3">3 seeds</button><button data-v="5">5 seeds</button></div>
+          </div>
+          <div class="ctl">
+            <label class="t" for="noise">Depolarising noise p <span id="noiseV">0.00</span></label>
+            <input id="noise" type="range" min="0" max="0.1" step="0.005" value="0">
+            <div class="hint">Applied in closed form: K′ = (1−p)²K + 2(1−p)p/d + p²/d. It rescales and shifts every kernel value equally, so ROC-AUC cannot move; watch the kernel matrix lose contrast instead.</div>
+          </div>
+          <div class="ctl">
+            <label class="t" for="lambda">Bandwidth λ <span id="lambdaV">auto</span></label>
+            <label class="switch"><input type="checkbox" id="lambdaAuto" checked> Auto: median benign kernel value ≈ 0.5</label>
+            <input id="lambda" type="range" min="0.02" max="1.2" step="0.01" value="0.2" disabled>
+            <div class="hint">Only affects the bandwidth-scaled kernel. Auto uses benign training rows only, like γ = 'scale' for the RBF kernel.</div>
+          </div>
+          <div class="ctl">
+            <label class="t" for="focus">Focus detector</label>
+            <select id="focus"></select>
+          </div>
+          <div class="ctl">
+            <button class="mini-btn" id="redraw">Draw a new synthetic dataset</button>
+            <div class="status" id="status"><i></i><span>starting…</span></div>
+          </div>
+        </aside>
+
+        <div class="results">
+          <div class="panel card wide">
+            <p class="headline" id="headline">Computing…</p>
+            <div class="legend">
+              <span><i class="sw c"></i>Classical detector</span>
+              <span><i class="sw q"></i>Quantum kernel (paper configuration)</span>
+              <span><i class="sw f"></i>Bandwidth-scaled quantum kernel (future-work idea, live only)</span>
+              <span><i class="sw p"></i>Value reported in the paper</span>
+            </div>
+            <div id="bars"></div>
+            <div class="chart-note">ROC-AUC, mean ± one standard deviation across seeds. The dashed line marks chance (0.5).</div>
+          </div>
+
+          <div class="panel card">
+            <h3>ROC curve</h3>
+            <p class="sub" id="rocSub">Seed 0, focus detector against the strongest opponent.</p>
+            <div id="roc"></div>
+          </div>
+
+          <div class="panel card">
+            <h3>Score map</h3>
+            <p class="sub" id="mapSub">Anomaly score over the first two principal components.</p>
+            <div class="map-wrap"><canvas id="map" width="560" height="560"></canvas></div>
+            <div class="axis-note"><span>PC1 →</span><span>● train · ○ benign test · × attack · ┄ default threshold</span></div>
+          </div>
+
+          <div class="panel card">
+            <h3>Kernel matrices</h3>
+            <p class="sub">First 40 benign training rows, colour scale fixed from 0 to 1.</p>
+            <div class="gram">
+              <figure><canvas id="gramC" width="40" height="40"></canvas><figcaption id="gramCcap"></figcaption></figure>
+              <figure><canvas id="gramQ" width="40" height="40"></canvas><figcaption id="gramQcap"></figcaption></figure>
+            </div>
+            <p class="chart-note" id="gramNote"></p>
+          </div>
+
+          <div class="panel card">
+            <h3>Reported in the paper</h3>
+            <p class="sub" id="paperSub"></p>
+            <table class="ptable" id="ptable"></table>
+            <div class="src" id="paperSrc"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="latency">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="sec-num">02 / Cost</div>
+        <div>
+          <h2>The latency race</h2>
+          <p>Median inference time per sample, measured in the paper on the same CPU with a warm-up pass discarded (Table R4). The race replays those measured rates: press start and watch each detector score the same batch of packets.</p>
+        </div>
+      </div>
+      <div class="lat-grid">
+        <div class="lat-copy reveal">
+          <div class="bignum">2,500<small>×</small></div>
+          <p>slower per sample than the RBF one-class SVM at 2 qubits, and about 5,200× at 4 qubits. These are desktop timings for relative comparison, not IoT device latency.</p>
+          <div id="latChart" style="margin-top:22px"></div>
+        </div>
+        <div class="panel race reveal">
+          <div class="race-ctl">
+            <div class="seg" data-key="packets"><button data-v="10">10 packets</button><button data-v="100">100</button><button data-v="1000">1,000</button></div>
+            <div class="seg" data-key="speed"><button data-v="1">Real time</button><button data-v="10">10×</button><button data-v="100">100×</button></div>
+          </div>
+          <div class="race-ctl">
+            <button class="btn" id="raceGo">Start race</button>
+            <button class="btn ghost" id="raceReset">Reset</button>
+            <span class="clock" id="raceClock">simulated time 0.000 s</span>
+          </div>
+          <div id="lanes"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="earlier">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="sec-num">03 / Archive</div>
+        <div>
+          <h2>The classical execution run</h2>
+          <p>Figures produced when the four classical detectors were first executed end to end through <span class="mono">run_all.py</span> and <span class="mono">summarize_results.py</span> (branch <span class="mono">claude/classical-anomaly-detectors-1eudfd</span>, commit <span class="mono">d776ae5</span>).</p>
+        </div>
+      </div>
+      <div class="caveat reveal">
+        <span aria-hidden="true">⚑</span>
+        <div><b>Synthetic, illustrative data.</b> These plots came from an N-BaIoT-shaped synthetic device (115 features, PCA 8) because the UCI download was blocked in that environment. That session states the numbers prove the code runs and show the output format; they are not scientific results.</div>
+      </div>
+      <div class="gal">
+        <div class="reveal">
+          <div class="tabs" role="tablist" id="galTabs">
+            <button role="tab" data-img="cl_scores_ae" aria-selected="true">Autoencoder</button>
+            <button role="tab" data-img="cl_scores_if">Isolation Forest</button>
+            <button role="tab" data-img="cl_scores_lof">LOF</button>
+            <button role="tab" data-img="cl_scores_ocsvm">RBF OCSVM</button>
+          </div>
+          <figure class="shot"><img id="galMain" src="assets/cl_scores_ae.webp" alt="Score distribution and ROC curve"><figcaption><span id="galCap">Shallow autoencoder: score distribution and ROC curve on nbaiot_demo.</span><span>outputs/&lt;detector&gt;/</span></figcaption></figure>
+          <figure class="shot" style="margin-top:20px"><img src="assets/cl_fig_rocauc_by_device.webp" alt="ROC-AUC by device and detector"><figcaption><span>ROC-AUC by device and detector across four synthetic demo devices.</span><span>fig_rocauc_by_device</span></figcaption></figure>
+        </div>
+        <div class="gal-side reveal">
+          <figure class="shot"><img src="assets/cl_fig_mean_rocauc.webp" alt="Classical detectors ranked by mean ROC-AUC"><figcaption><span>Classical detectors ranked by mean ROC-AUC.</span><span>fig_mean_rocauc</span></figcaption></figure>
+          <figure class="shot"><img src="assets/cl_fig_rocauc_heatmap.webp" alt="ROC-AUC heatmap"><figcaption><span>ROC-AUC heatmap, device by detector.</span><span>fig_rocauc_heatmap</span></figcaption></figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="method">
+    <div class="wrap">
+      <div class="sec-head reveal">
+        <div class="sec-num">04 / Method</div>
+        <div>
+          <h2>What is live, and what is reported</h2>
+          <p>The page never edits a measured number. Live values are computed here from scratch; reported values are copied unchanged from the research brief.</p>
+        </div>
+      </div>
+      <div class="method">
+        <div class="panel card reveal">
+          <h3>Computed live</h3>
+          <ul>
+            <li>Data from the brief's generators: 15-feature Gaussian shift (attacks shift about 60% of features by ±(3.5σ + e)), and a 10-D embedded ring with attacks at radius 1.6.</li>
+            <li>Exact statevector simulation of Qiskit's ZZFeatureMap (linear entanglement), Z-only map and the trainable map, fidelity kernel |⟨Φ(x)|Φ(y)⟩|².</li>
+            <li>One-class SVM (ν = 0.1 or 0.3) solved by SMO on each kernel; Isolation Forest (100 trees), LOF (20 neighbours) and a k→8→b→8→k autoencoder written in plain JavaScript.</li>
+          </ul>
+        </div>
+        <div class="panel card reveal">
+          <h3>The bandwidth-scaled kernel</h3>
+          <ul>
+            <li>Section 12 of the brief lists bandwidth-scaled quantum kernels and replacing hard clipping as future work. This configuration tries exactly that: standardised PCA inputs times λ, no clipping, ZZ map with 2 layers.</li>
+            <li>λ is picked from benign training rows only (median kernel value ≈ 0.5). Attack rows never tune it.</li>
+            <li>It was not part of the paper's experiments, so it has no reported value and must be presented as exploratory.</li>
+          </ul>
+        </div>
+        <div class="panel card reveal">
+          <h3>Differences and limits</h3>
+          <ul>
+            <li>Live runs use all 80 training rows as kernel references; the paper's sweep used 60. Random draws differ from the Python runs, so live values land near, not on, the reported ones.</li>
+            <li>The noise model shifts and rescales every kernel entry by the same amount, so it cannot change the SVM's ranking. That matches the paper's finding that noise was not the bottleneck.</li>
+            <li>All data is synthetic. Real N-BaIoT and TON-IoT results are still pending.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Code: github.com/False0604/Quantum_Kernel_CP · branch claude/quantum-anomaly-detectors-iot-9n5gn0 · reported values from commits 2779ca9 and 96198ac.</span>
+    <span>Simulation only. No quantum hardware was used.</span>
+  </div>
+</footer>
+
+<dialog id="lightbox"><button class="btn ghost" id="lbClose" aria-label="Close">Close</button><img id="lbImg" alt=""></dialog>
+
+<script>
+/* ===== Engine: data, preprocessing, detectors, quantum simulator, metrics ===== */
+const Engine = (() => {
+  const PI = Math.PI;
+
+  // ---------- seeded randomness ----------
+  function rng(seed) {
+    let a = (seed >>> 0) || 1;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gauss(r) {
+    let u = 0; while (u === 0) u = r();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * PI * r());
+  }
+  function shuffle(arr, r) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+    return a;
+  }
+  const range = n => Array.from({ length: n }, (_, i) => i);
+
+  // ---------- synthetic regimes (as described in the brief, section 7) ----------
+  function makeGaussian(dataSeed) {
+    const r = rng(1000 + dataSeed), n = 350, d = 15;
+    const M = range(d).map(() => range(d).map(() => 0.6 * gauss(r)));
+    const Z = range(n).map(() => range(d).map(() => gauss(r)));
+    const X = Z.map(z => range(d).map(j => { let s = 0; for (let t = 0; t < d; t++) s += z[t] * M[t][j]; return s; }));
+    const mu = range(d).map(j => X.reduce((s, x) => s + x[j], 0) / n);
+    const sig = range(d).map(j => Math.sqrt(X.reduce((s, x) => s + (x[j] - mu[j]) ** 2, 0) / (n - 1)));
+    return { kind: 'gaussian', benign: X, sig, d };
+  }
+  function makeRing(dataSeed) {
+    const r = rng(2000 + dataSeed), d = 10;
+    const R = range(2).map(() => range(d).map(() => gauss(r)));
+    const emb = rad => { const th = 2 * PI * r(); const p = [rad * Math.cos(th), rad * Math.sin(th)];
+      return range(d).map(j => p[0] * R[0][j] + p[1] * R[1][j] + 0.05 * gauss(r)); };
+    return { kind: 'ring', benign: range(350).map(() => emb(1)), attack: range(200).map(() => emb(1.6)), d };
+  }
+
+  // Train-on-normal split: N = 80 benign train, M = 50 benign test + 50 attack test
+  function split(ds, seed) {
+    const r = rng(77 + seed * 7919);
+    const idx = shuffle(range(ds.benign.length), r);
+    const train = idx.slice(0, 80).map(i => ds.benign[i]);
+    const testB = idx.slice(80, 130).map(i => ds.benign[i]);
+    let testA;
+    if (ds.kind === 'gaussian') {
+      testA = testB.map(x => x.map((v, j) => {
+        if (r() < 0.6) { const e = -Math.log(1 - r()) * ds.sig[j]; return v + (r() < 0.5 ? -1 : 1) * (3.5 * ds.sig[j] + e); }
+        return v;
+      }));
+    } else {
+      testA = shuffle(range(ds.attack.length), r).slice(0, 50).map(i => ds.attack[i]);
+    }
+    return { train, test: testB.concat(testA), y: range(100).map(i => (i < 50 ? 0 : 1)) };
+  }
+
+  // ---------- linear algebra ----------
+  function eigSym(A) { // cyclic Jacobi; returns {vals, vecs(columns)} sorted descending
+    const n = A.length, a = A.map(r => r.slice());
+    const V = range(n).map(i => range(n).map(j => (i === j ? 1 : 0)));
+    for (let sweep = 0; sweep < 60; sweep++) {
+      let off = 0;
+      for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) off += a[p][q] * a[p][q];
+      if (off < 1e-20) break;
+      for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) {
+        if (Math.abs(a[p][q]) < 1e-300) continue;
+        const theta = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+        const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+        const c = 1 / Math.sqrt(t * t + 1), s = t * c;
+        for (let k = 0; k < n; k++) { const akp = a[k][p], akq = a[k][q]; a[k][p] = c * akp - s * akq; a[k][q] = s * akp + c * akq; }
+        for (let k = 0; k < n; k++) { const apk = a[p][k], aqk = a[q][k]; a[p][k] = c * apk - s * aqk; a[q][k] = s * apk + c * aqk; }
+        for (let k = 0; k < n; k++) { const vkp = V[k][p], vkq = V[k][q]; V[k][p] = c * vkp - s * vkq; V[k][q] = s * vkp + c * vkq; }
+      }
+    }
+    const order = range(n).sort((i, j) => a[j][j] - a[i][i]);
+    return { vals: order.map(i => a[i][i]), vecs: order.map(i => V.map(row => row[i])) };
+  }
+
+  // Preprocessing fitted on benign train only: standardise, PCA to k
+  function fitPreprocess(train, k) {
+    const n = train.length, d = train[0].length;
+    const mu = range(d).map(j => train.reduce((s, x) => s + x[j], 0) / n);
+    const sd = range(d).map(j => Math.sqrt(train.reduce((s, x) => s + (x[j] - mu[j]) ** 2, 0) / n));
+    const keep = range(d).filter(j => sd[j] > 1e-9);
+    const z = x => keep.map(j => (x[j] - mu[j]) / sd[j]);
+    const Z = train.map(z), dd = keep.length;
+    const C = range(dd).map(i => range(dd).map(j => Z.reduce((s, r) => s + r[i] * r[j], 0) / (n - 1)));
+    const { vals, vecs } = eigSym(C);
+    const W = vecs.slice(0, k);
+    const total = vals.reduce((s, v) => s + Math.max(v, 0), 0);
+    const explained = vals.slice(0, k).reduce((s, v) => s + v, 0) / total;
+    const transform = X => X.map(x => { const zx = z(x); return W.map(w => w.reduce((s, wi, i) => s + wi * zx[i], 0)); });
+    return { transform, explained };
+  }
+
+  // ---------- metrics ----------
+  function rocAuc(scores, y) {
+    const idx = range(scores.length).sort((a, b) => scores[a] - scores[b]);
+    const ranks = new Array(scores.length);
+    for (let i = 0; i < idx.length;) {
+      let j = i; while (j + 1 < idx.length && scores[idx[j + 1]] === scores[idx[i]]) j++;
+      const rk = (i + j) / 2 + 1; for (let t = i; t <= j; t++) ranks[idx[t]] = rk; i = j + 1;
+    }
+    let nP = 0, sum = 0; y.forEach((v, i) => { if (v) { nP++; sum += ranks[i]; } });
+    const nN = y.length - nP;
+    return (sum - nP * (nP + 1) / 2) / (nP * nN);
+  }
+  function avgPrecision(scores, y) {
+    const idx = range(scores.length).sort((a, b) => scores[b] - scores[a]);
+    const nP = y.reduce((s, v) => s + v, 0);
+    let tp = 0, ap = 0;
+    idx.forEach((i, r) => { if (y[i]) { tp++; ap += tp / (r + 1); } });
+    return ap / nP;
+  }
+  function rocCurve(scores, y) {
+    const idx = range(scores.length).sort((a, b) => scores[b] - scores[a]);
+    const nP = y.reduce((s, v) => s + v, 0), nN = y.length - nP;
+    const pts = [[0, 0]]; let tp = 0, fp = 0;
+    idx.forEach((i, r) => { if (y[i]) tp++; else fp++; if (r === idx.length - 1 || scores[idx[r + 1]] !== scores[i]) pts.push([fp / nN, tp / nP]); });
+    return pts;
+  }
+  function f1(pred, y) {
+    let tp = 0, fp = 0, fn = 0;
+    pred.forEach((p, i) => { if (p && y[i]) tp++; else if (p && !y[i]) fp++; else if (!p && y[i]) fn++; });
+    return tp === 0 ? 0 : (2 * tp) / (2 * tp + fp + fn);
+  }
+
+  // ---------- one-class SVM (libsvm-style SMO on a precomputed kernel) ----------
+  function ocsvm(K, nu) {
+    const l = K.length, C = 1, total = nu * l;
+    const alpha = new Float64Array(l);
+    let rem = total;
+    for (let i = 0; i < l && rem > 0; i++) { alpha[i] = Math.min(1, rem); rem -= alpha[i]; }
+    const G = new Float64Array(l);
+    for (let i = 0; i < l; i++) { let s = 0; for (let j = 0; j < l; j++) s += K[i][j] * alpha[j]; G[i] = s; }
+    for (let it = 0; it < 20000; it++) {
+      let i = -1, j = -1, gmax = -Infinity, gmin = Infinity;
+      for (let t = 0; t < l; t++) {
+        if (alpha[t] < C - 1e-12 && -G[t] > gmax) { gmax = -G[t]; i = t; }
+        if (alpha[t] > 1e-12 && -G[t] < gmin) { gmin = -G[t]; j = t; }
+      }
+      if (i < 0 || j < 0 || gmax - gmin < 1e-6) break;
+      const eta = Math.max(K[i][i] + K[j][j] - 2 * K[i][j], 1e-12);
+      let d = (G[j] - G[i]) / eta;
+      d = Math.min(d, C - alpha[i], alpha[j]);
+      if (d <= 0) break;
+      alpha[i] += d; alpha[j] -= d;
+      for (let t = 0; t < l; t++) G[t] += d * (K[t][i] - K[t][j]);
+    }
+    let sum = 0, cnt = 0, ub = Infinity, lb = -Infinity;
+    for (let t = 0; t < l; t++) {
+      if (alpha[t] > 1e-9 && alpha[t] < C - 1e-9) { sum += G[t]; cnt++; }
+      else if (alpha[t] <= 1e-9) ub = Math.min(ub, G[t]); else lb = Math.max(lb, G[t]);
+    }
+    const rho = cnt ? sum / cnt : (isFinite(ub) && isFinite(lb) ? (ub + lb) / 2 : 0);
+    // score = rho - sum alpha K  (higher = more anomalous); anomaly if score > 0
+    return { alpha, rho, score: krow => { let s = 0; for (let t = 0; t < l; t++) if (alpha[t]) s += alpha[t] * krow[t]; return rho - s; } };
+  }
+
+  // ---------- classical detectors ----------
+  const sqd = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2; return s; };
+
+  function rbfOCSVM(Xtr) {
+    const k = Xtr[0].length, all = Xtr.flat(), m = all.reduce((s, v) => s + v, 0) / all.length;
+    const variance = all.reduce((s, v) => s + (v - m) ** 2, 0) / all.length;
+    const gamma = 1 / (k * variance);
+    const kern = (a, b) => Math.exp(-gamma * sqd(a, b));
+    const K = Xtr.map(a => Xtr.map(b => kern(a, b)));
+    const m1 = ocsvm(K, 0.1);
+    const score = X => X.map(x => m1.score(Xtr.map(t => kern(x, t))));
+    return { score, threshold: 0, K, kern };
+  }
+
+  function cFactor(n) { return n > 2 ? 2 * (Math.log(n - 1) + 0.5772156649) - (2 * (n - 1)) / n : n === 2 ? 1 : 0; }
+  function isolationForest(Xtr, seed) {
+    const r = rng(500 + seed), psi = Math.min(256, Xtr.length), hlim = Math.ceil(Math.log2(psi)), k = Xtr[0].length;
+    const build = (rows, depth) => {
+      if (depth >= hlim || rows.length <= 1) return { size: rows.length };
+      const q = Math.floor(r() * k);
+      let lo = Infinity, hi = -Infinity; rows.forEach(x => { lo = Math.min(lo, x[q]); hi = Math.max(hi, x[q]); });
+      if (hi - lo < 1e-12) return { size: rows.length };
+      const p = lo + r() * (hi - lo);
+      return { q, p, left: build(rows.filter(x => x[q] < p), depth + 1), right: build(rows.filter(x => x[q] >= p), depth + 1) };
+    };
+    const trees = range(100).map(() => build(shuffle(Xtr, r).slice(0, psi), 0));
+    const path = (x, node, d) => (node.size !== undefined ? d + cFactor(node.size) : path(x, x[node.q] < node.p ? node.left : node.right, d + 1));
+    const cn = cFactor(psi);
+    const score = X => X.map(x => Math.pow(2, -trees.reduce((s, t) => s + path(x, t, 0), 0) / trees.length / cn));
+    return { score, threshold: 0.5 };
+  }
+
+  function lof(Xtr, kn = 20) {
+    const n = Xtr.length;
+    const nbrs = x => Xtr.map((t, i) => [Math.sqrt(sqd(x, t)), i]).sort((a, b) => a[0] - b[0]);
+    const trN = Xtr.map((x, i) => nbrs(x).filter(p => p[1] !== i).slice(0, kn));
+    const kdist = trN.map(nb => nb[kn - 1][0]);
+    const lrd = trN.map(nb => 1 / (nb.reduce((s, [d, o]) => s + Math.max(kdist[o], d), 0) / kn + 1e-10));
+    const score = X => X.map(x => {
+      const nb = nbrs(x).slice(0, kn);
+      const l = 1 / (nb.reduce((s, [d, o]) => s + Math.max(kdist[o], d), 0) / kn + 1e-10);
+      return nb.reduce((s, [, o]) => s + lrd[o], 0) / kn / l;
+    });
+    return { score, threshold: 1.5 };
+  }
+
+  function autoencoder(Xtr, seed) {
+    const r = rng(900 + seed), k = Xtr[0].length, b = Math.min(3, k - 1);
+    const sizes = [k, 8, b, 8, k];
+    const L = sizes.length - 1;
+    const W = [], B = [];
+    for (let l = 0; l < L; l++) {
+      const lim = Math.sqrt(6 / sizes[l]);
+      W.push(range(sizes[l + 1]).map(() => range(sizes[l]).map(() => (r() * 2 - 1) * lim * 0.7)));
+      B.push(new Array(sizes[l + 1]).fill(0));
+    }
+    const forward = x => { const acts = [x]; let h = x;
+      for (let l = 0; l < L; l++) { const z = W[l].map((w, o) => w.reduce((s, wi, i) => s + wi * h[i], B[l][o]));
+        h = l < L - 1 ? z.map(v => (v > 0 ? v : 0)) : z; acts.push(h); }
+      return acts; };
+    const err = x => { const o = forward(x)[L]; return o.reduce((s, v, i) => s + (v - x[i]) ** 2, 0) / k; };
+    const idx = shuffle(range(Xtr.length), r), nVal = Math.floor(Xtr.length * 0.2);
+    const val = idx.slice(0, nVal).map(i => Xtr[i]), tr = idx.slice(nVal).map(i => Xtr[i]);
+    const mW = W.map(w => w.map(row => row.map(() => 0))), vW = W.map(w => w.map(row => row.map(() => 0)));
+    const mB = B.map(b2 => b2.map(() => 0)), vB = B.map(b2 => b2.map(() => 0));
+    const lr = 0.005, b1 = 0.9, b2c = 0.999; let step = 0;
+    let best = Infinity, bestW = null, bestB = null, bad = 0;
+    for (let ep = 0; ep < 400; ep++) {
+      const order = shuffle(range(tr.length), r);
+      for (let s0 = 0; s0 < order.length; s0 += 16) {
+        const batch = order.slice(s0, s0 + 16).map(i => tr[i]);
+        const gW = W.map(w => w.map(row => row.map(() => 0))), gB = B.map(b2 => b2.map(() => 0));
+        batch.forEach(x => {
+          const acts = forward(x);
+          let delta = acts[L].map((v, i) => (2 * (v - x[i])) / k / batch.length);
+          for (let l = L - 1; l >= 0; l--) {
+            const hin = acts[l];
+            delta.forEach((dv, o) => { gB[l][o] += dv; for (let i = 0; i < hin.length; i++) gW[l][o][i] += dv * hin[i]; });
+            if (l > 0) delta = hin.map((hv, i) => (hv > 0 ? delta.reduce((s, dv, o) => s + dv * W[l][o][i], 0) : 0));
+          }
+        });
+        step++;
+        for (let l = 0; l < L; l++) {
+          for (let o = 0; o < W[l].length; o++) {
+            for (let i = 0; i < W[l][o].length; i++) {
+              const g = gW[l][o][i];
+              mW[l][o][i] = b1 * mW[l][o][i] + (1 - b1) * g; vW[l][o][i] = b2c * vW[l][o][i] + (1 - b2c) * g * g;
+              W[l][o][i] -= (lr * mW[l][o][i] / (1 - b1 ** step)) / (Math.sqrt(vW[l][o][i] / (1 - b2c ** step)) + 1e-8);
+            }
+            const g = gB[l][o];
+            mB[l][o] = b1 * mB[l][o] + (1 - b1) * g; vB[l][o] = b2c * vB[l][o] + (1 - b2c) * g * g;
+            B[l][o] -= (lr * mB[l][o] / (1 - b1 ** step)) / (Math.sqrt(vB[l][o] / (1 - b2c ** step)) + 1e-8);
+          }
+        }
+      }
+      const vl = val.reduce((s, x) => s + err(x), 0) / val.length;
+      if (vl < best - 1e-6) { best = vl; bestW = JSON.stringify(W); bestB = JSON.stringify(B); bad = 0; }
+      else if (++bad >= 40) break;
+    }
+    if (bestW) { JSON.parse(bestW).forEach((w, l) => (W[l] = w)); JSON.parse(bestB).forEach((b3, l) => (B[l] = b3)); }
+    const trErr = Xtr.map(err).sort((a, c) => a - c);
+    const threshold = trErr[Math.floor(0.95 * (trErr.length - 1))];
+    return { score: X => X.map(err), threshold };
+  }
+
+  // ---------- quantum statevector simulator ----------
+  function zeroState(nq) { const d = 1 << nq, re = new Float64Array(d), im = new Float64Array(d); re[0] = 1; return { re, im, d }; }
+  function H(s, q) { const b = 1 << q, h = Math.SQRT1_2;
+    for (let i = 0; i < s.d; i++) if (!(i & b)) { const j = i | b, ar = s.re[i], ai = s.im[i], br = s.re[j], bi = s.im[j];
+      s.re[i] = (ar + br) * h; s.im[i] = (ai + bi) * h; s.re[j] = (ar - br) * h; s.im[j] = (ai - bi) * h; } }
+  function P(s, q, th) { const b = 1 << q, c = Math.cos(th), sn = Math.sin(th);
+    for (let i = 0; i < s.d; i++) if (i & b) { const r0 = s.re[i], i0 = s.im[i]; s.re[i] = r0 * c - i0 * sn; s.im[i] = r0 * sn + i0 * c; } }
+  function CX(s, c, t) { const cb = 1 << c, tb = 1 << t;
+    for (let i = 0; i < s.d; i++) if ((i & cb) && !(i & tb)) { const j = i | tb;
+      let tmp = s.re[i]; s.re[i] = s.re[j]; s.re[j] = tmp; tmp = s.im[i]; s.im[i] = s.im[j]; s.im[j] = tmp; } }
+  function RY(s, q, th) { const b = 1 << q, c = Math.cos(th / 2), sn = Math.sin(th / 2);
+    for (let i = 0; i < s.d; i++) if (!(i & b)) { const j = i | b, ar = s.re[i], ai = s.im[i], br = s.re[j], bi = s.im[j];
+      s.re[i] = c * ar - sn * br; s.im[i] = c * ai - sn * bi; s.re[j] = sn * ar + c * br; s.im[j] = sn * ai + c * bi; } }
+  function RZ(s, q, th) { const b = 1 << q;
+    for (let i = 0; i < s.d; i++) { const ph = (i & b) ? th / 2 : -th / 2, c = Math.cos(ph), sn = Math.sin(ph), r0 = s.re[i], i0 = s.im[i];
+      s.re[i] = r0 * c - i0 * sn; s.im[i] = r0 * sn + i0 * c; } }
+
+  // Qiskit ZZFeatureMap, linear entanglement: H, P(2x_j), [CX, P(2(pi-x_j)(pi-x_j+1)), CX]
+  function zzState(x, reps, entangle = true) {
+    const nq = x.length, s = zeroState(nq);
+    for (let r = 0; r < reps; r++) {
+      for (let q = 0; q < nq; q++) H(s, q);
+      for (let q = 0; q < nq; q++) P(s, q, 2 * x[q]);
+      if (entangle) for (let q = 0; q < nq - 1; q++) { CX(s, q, q + 1); P(s, q + 1, 2 * (PI - x[q]) * (PI - x[q + 1])); CX(s, q, q + 1); }
+    }
+    return s;
+  }
+  function trainableState(x, theta) {
+    const nq = x.length, s = zeroState(nq);
+    for (let q = 0; q < nq; q++) { RY(s, q, x[q]); RZ(s, q, 2 * x[q]); }
+    for (let q = 0; q < nq - 1; q++) CX(s, q, q + 1);
+    if (nq > 2) CX(s, nq - 1, 0);
+    for (let q = 0; q < nq; q++) { RY(s, q, theta[2 * q]); RZ(s, q, theta[2 * q + 1]); }
+    return s;
+  }
+  function fidelity(a, b) { let r = 0, i = 0; for (let t = 0; t < a.d; t++) { r += a.re[t] * b.re[t] + a.im[t] * b.im[t]; i += a.re[t] * b.im[t] - a.im[t] * b.re[t]; } return r * r + i * i; }
+
+  // ---------- quantum encodings ----------
+  function percentile(sorted, p) { const pos = (sorted.length - 1) * p, lo = Math.floor(pos), hi = Math.ceil(pos); return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo); }
+  function angleScaler(Xtr) {
+    const k = Xtr[0].length;
+    const q = range(k).map(j => { const col = Xtr.map(x => x[j]).sort((a, b) => a - b); return [percentile(col, 0.01), percentile(col, 0.99)]; });
+    return X => X.map(x => x.map((v, j) => Math.min(PI, Math.max(0, (PI * (v - q[j][0])) / (q[j][1] - q[j][0] || 1)))));
+  }
+  function bandwidthScaler(Xtr, lambda) {
+    const k = Xtr[0].length;
+    const sd = range(k).map(j => { const m = Xtr.reduce((s, x) => s + x[j], 0) / Xtr.length; return Math.sqrt(Xtr.reduce((s, x) => s + (x[j] - m) ** 2, 0) / Xtr.length) || 1; });
+    return X => X.map(x => x.map((v, j) => (lambda * v) / sd[j]));
+  }
+
+  const Q_CONFIGS = [
+    { id: 'tuned', label: 'ZZ, bandwidth λ, 2 layers', short: 'Bandwidth-scaled', reps: 2, enc: 'bw', nu: 0.1, future: true },
+    { id: 'zz2', label: 'ZZ, angle, 2 layers', reps: 2, enc: 'angle', nu: 0.1 },
+    { id: 'train', label: 'Trainable, angle', enc: 'angle', nu: 0.1, trainable: true },
+    { id: 'zonly', label: 'Z-only, angle', reps: 1, enc: 'angle', nu: 0.1, noEnt: true },
+    { id: 'zznoang', label: 'ZZ, no angle', reps: 1, enc: 'raw', nu: 0.1 },
+    { id: 'zzang', label: 'ZZ, angle', reps: 1, enc: 'angle', nu: 0.1 },
+    { id: 'zznu', label: 'ZZ, angle, ν = 0.3', reps: 1, enc: 'angle', nu: 0.3 },
+  ];
+
+  // median heuristic on benign training rows only: choose lambda so the median off-diagonal kernel value is about 0.5
+  function autoLambda(Xtr, reps) {
+    const sample = Xtr.slice(0, 40);
+    const med = lam => { const enc = bandwidthScaler(Xtr, lam)(sample).map(x => zzState(x, reps));
+      const v = []; for (let i = 0; i < enc.length; i++) for (let j = i + 1; j < enc.length; j++) v.push(fidelity(enc[i], enc[j]));
+      v.sort((a, b) => a - b); return v[Math.floor(v.length / 2)]; };
+    let lo = 0.01, hi = 1.5;
+    for (let it = 0; it < 22; it++) { const mid = Math.sqrt(lo * hi); if (med(mid) > 0.5) lo = mid; else hi = mid; }
+    return Math.sqrt(lo * hi);
+  }
+
+  function quantumDetector(cfg, Xtr, opts, seed) {
+    const k = Xtr[0].length, dim = 1 << k, p = opts.noise || 0;
+    let encode, stateOf, lambdaUsed = null, trainLog = null;
+    if (cfg.enc === 'raw') encode = X => X;
+    else if (cfg.enc === 'angle') encode = angleScaler(Xtr);
+    else { lambdaUsed = opts.lambdaAuto ? autoLambda(Xtr, cfg.reps) : opts.lambda; encode = bandwidthScaler(Xtr, lambdaUsed); }
+
+    if (cfg.trainable) {
+      const r = rng(4000 + seed);
+      let theta = range(2 * k).map(() => (r() * 2 - 1) * PI);
+      const enc20 = encode(Xtr.slice(0, 20));
+      const pairs = range(15).map(() => { const a = Math.floor(r() * 20); let b = Math.floor(r() * 19); if (b >= a) b++; return [a, b]; });
+      const obj = th => pairs.reduce((s, [a, b]) => s + fidelity(trainableState(enc20[a], th), trainableState(enc20[b], th)), 0) / pairs.length;
+      trainLog = [obj(theta)];
+      for (let it = 0; it < 15; it++) {
+        const grad = theta.map((_, i) => { const tp = theta.slice(), tm = theta.slice(); tp[i] += PI / 2; tm[i] -= PI / 2; return (obj(tp) - obj(tm)) / 2; });
+        theta = theta.map((t, i) => t + 0.1 * grad[i]);
+        trainLog.push(obj(theta));
+      }
+      stateOf = x => trainableState(x, theta);
+    } else stateOf = x => zzState(x, cfg.reps, !cfg.noEnt);
+
+    const noisy = f => (1 - p) * (1 - p) * f + (2 * (1 - p) * p) / dim + (p * p) / dim;
+    const refStates = encode(Xtr).map(stateOf);
+    const K = refStates.map(a => refStates.map(b => noisy(fidelity(a, b))));
+    const model = ocsvm(K, cfg.nu);
+    const score = X => encode(X).map(stateOf).map(s => model.score(refStates.map(rs => noisy(fidelity(s, rs)))));
+    return { score, threshold: 0, K, lambdaUsed, trainLog };
+  }
+
+  function effectiveRank(K) {
+    const vals = eigSym(K).vals.map(v => Math.max(v, 0)), tot = vals.reduce((s, v) => s + v, 0);
+    let h = 0; vals.forEach(v => { const q = v / tot; if (q > 1e-15) h -= q * Math.log(q); });
+    const cond = vals[0] / Math.max(vals[vals.length - 1], 1e-300);
+    return { erank: Math.exp(h), cond, vals };
+  }
+
+  const CLASSICAL = [
+    { id: 'ae', label: 'Autoencoder', make: (X, s) => autoencoder(X, s) },
+    { id: 'lof', label: 'LOF', make: X => lof(X) },
+    { id: 'if', label: 'Isolation Forest', make: (X, s) => isolationForest(X, s) },
+    { id: 'rbf', label: 'RBF OCSVM', make: X => rbfOCSVM(X) },
+  ];
+
+  const dsCache = {};
+  function dataset(kind, dataSeed) {
+    const key = kind + dataSeed;
+    return dsCache[key] || (dsCache[key] = kind === 'gaussian' ? makeGaussian(dataSeed) : makeRing(dataSeed));
+  }
+
+  // One full run: every detector, every seed, identical inputs per seed
+  function run(opts) {
+    const ds = dataset(opts.regime, opts.dataSeed || 0);
+    const seeds = range(opts.seeds);
+    const res = {}; const keep = {};
+    const add = (id, sc, y, thr) => {
+      (res[id] = res[id] || { auc: [], ap: [], f1: [] });
+      res[id].auc.push(rocAuc(sc, y)); res[id].ap.push(avgPrecision(sc, y)); res[id].f1.push(f1(sc.map(v => v > thr), y));
+    };
+    let explained = 0;
+    seeds.forEach(seed => {
+      const sp = split(ds, seed), pre = fitPreprocess(sp.train, opts.k);
+      const Xtr = pre.transform(sp.train), Xte = pre.transform(sp.test);
+      explained += pre.explained / seeds.length;
+      CLASSICAL.forEach(c => { const m = c.make(Xtr, seed), sc = m.score(Xte); add(c.id, sc, sp.y, m.threshold);
+        if (seed === 0) keep[c.id] = { model: m, scores: sc }; });
+      Q_CONFIGS.forEach(cfg => { const m = quantumDetector(cfg, Xtr, opts, seed), sc = m.score(Xte); add(cfg.id, sc, sp.y, m.threshold);
+        if (seed === 0) keep[cfg.id] = { model: m, scores: sc }; else if (m.lambdaUsed) keep[cfg.id].lambdas = (keep[cfg.id].lambdas || []).concat(m.lambdaUsed); });
+      if (seed === 0) Object.assign(keep, { Xtr, Xte, y: sp.y });
+    });
+    const stat = a => { const m = a.reduce((s, v) => s + v, 0) / a.length; return { mean: m, std: Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / a.length) }; };
+    const summary = {};
+    Object.entries(res).forEach(([id, r]) => (summary[id] = { auc: stat(r.auc), ap: stat(r.ap), f1: stat(r.f1) }));
+    return { summary, keep, explained };
+  }
+
+  return { run, rocCurve, effectiveRank, Q_CONFIGS, CLASSICAL, zzState, fidelity, rng };
+})();
+if (typeof module !== 'undefined') module.exports = Engine;
+
+</script>
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const C = { ink: css('--ink'), ink2: css('--ink-2'), muted: css('--muted'), line: css('--line'), cls: css('--classical'), clsSoft: css('--classical-soft'), clsDeep: css('--classical-deep'), q: css('--quantum'), qSoft: css('--quantum-soft'), qDeep: css('--quantum-deep'), attack: css('--attack'), paper: css('--paper') };
+
+  // ---------- reported values (copied unchanged from the research brief) ----------
+  const PAPER = {
+    'gaussian-2': { src: 'Table R3, E3 variant sweep, Gaussian shift, 2 qubits, 3 seeds, commit 96198ac.', v: { ae: [.830, .023], lof: [.826, .027], if: [.825, .026], rbf: [.764, .020], zz2: [.693, .039], train: [.584, .080], zonly: [.554, .068], zznoang: [.516, .028], zzang: [.445, .057], zznu: [.444, .030] } },
+    'ring-2': { src: 'Table R3, E3 variant sweep, ring manifold, 2 qubits, 3 seeds, commit 96198ac.', v: { ae: [.978, .010], lof: [.952, .011], if: [.905, .022], rbf: [1.000, 0], zz2: [.827, .024], train: [.434, .002], zonly: [.151, .040], zznoang: [.620, .055], zzang: [.664, .073], zznu: [.664, .058] } },
+    'ring-4': { src: 'Table R3, E3 variant sweep, ring manifold, 4 qubits, 3 seeds, commit 96198ac.', v: { ae: [.968, .017], lof: [.949, .019], if: [.685, .029], rbf: [1.000, 0], zz2: [.543, .028], train: [.541, .055], zonly: [.423, .026], zznoang: [.551, .023], zzang: [.478, .074], zznu: [.479, .074] } },
+    'gaussian-4': { src: 'Table R2, E2 ablation, Gaussian shift, 4 qubits, p = 0, 2 seeds, commit 2779ca9. The paper ran only the baseline ZZ map here.', v: { ae: [.9470, .0166], lof: [.9486, .0102], if: [.9390, .0150], rbf: [.9450, .0146], zznoang: [.4484, .0256] } },
+  };
+  const LAT = [
+    { id: 'rbf', name: 'RBF OCSVM', us: 42.8, kind: 'c' },
+    { id: 'ae', name: 'Autoencoder', us: 43.8, kind: 'c' },
+    { id: 'lof', name: 'LOF', us: 60.6, kind: 'c' },
+    { id: 'if', name: 'Isolation Forest', us: 271.1, kind: 'c' },
+    { id: 'q2', name: 'Quantum, 2 qubits', us: 105164, kind: 'q' },
+    { id: 'q4', name: 'Quantum, 4 qubits', us: 224468, kind: 'q' },
+  ];
+
+  const NAMES = {}; Engine.CLASSICAL.forEach(c => NAMES[c.id] = c.label); Engine.Q_CONFIGS.forEach(q => NAMES[q.id] = q.label);
+  const isQ = id => Engine.Q_CONFIGS.some(q => q.id === id);
+  const fmt = (v, d = 3) => v.toFixed(d);
+
+  const state = { regime: 'ring', k: 2, seeds: 3, noise: 0, lambdaAuto: true, lambda: 0.2, focus: 'tuned', dataSeed: 0, packets: 100, speed: 1 };
+  let result = null;
+
+  // ---------- controls ----------
+  function syncSegs() {
+    document.querySelectorAll('.seg').forEach(seg => {
+      const key = seg.dataset.key;
+      seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(String(state[key]) === b.dataset.v)));
+    });
+    $('#regimeHint').textContent = state.regime === 'ring'
+      ? 'Benign points on a unit circle embedded in 10-D; attacks sit just off it, on a circle of radius 1.6.'
+      : '15 correlated features; attack rows copy benign test rows and shift about 60% of features by ±(3.5σ + e).';
+  }
+  document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const key = seg.dataset.key, v = b.dataset.v;
+    state[key] = isNaN(+v) ? v : +v; syncSegs();
+    if (['regime', 'k', 'seeds'].includes(key)) schedule();
+    if (['packets', 'speed'].includes(key)) resetRace();
+  }));
+  const focusSel = $('#focus');
+  [['Classical', Engine.CLASSICAL], ['Quantum', Engine.Q_CONFIGS]].forEach(([g, list]) => {
+    const og = document.createElement('optgroup'); og.label = g;
+    list.forEach(d => { const o = document.createElement('option'); o.value = d.id; o.textContent = d.label + (d.future ? ' (future work)' : ''); og.appendChild(o); });
+    focusSel.appendChild(og);
+  });
+  focusSel.value = state.focus;
+  focusSel.addEventListener('change', () => { state.focus = focusSel.value; renderFocus(); renderBars(); });
+  $('#noise').addEventListener('input', e => { state.noise = +e.target.value; $('#noiseV').textContent = state.noise.toFixed(3); schedule(); });
+  $('#lambdaAuto').addEventListener('change', e => { state.lambdaAuto = e.target.checked; $('#lambda').disabled = state.lambdaAuto; schedule(); });
+  $('#lambda').addEventListener('input', e => { state.lambda = +e.target.value; schedule(); });
+  $('#redraw').addEventListener('click', () => { state.dataSeed++; schedule(); });
+
+  let timer = null;
+  function schedule() {
+    clearTimeout(timer);
+    const st = $('#status'); st.classList.add('busy'); st.querySelector('span').textContent = 'computing…';
+    timer = setTimeout(compute, 60);
+  }
+  function compute() {
+    const t0 = performance.now();
+    result = Engine.run({ regime: state.regime, k: state.k, seeds: state.seeds, noise: state.noise, lambdaAuto: state.lambdaAuto, lambda: state.lambda, dataSeed: state.dataSeed });
+    const ms = Math.round(performance.now() - t0);
+    const st = $('#status'); st.classList.remove('busy');
+    st.querySelector('span').textContent = `${state.seeds} seed${state.seeds > 1 ? 's' : ''} × 11 detectors in ${ms} ms · data draw #${state.dataSeed}`;
+    const lam = result.keep.tuned.model.lambdaUsed;
+    $('#lambdaV').textContent = state.lambdaAuto ? `auto → ${lam.toFixed(3)}` : lam.toFixed(2);
+    if (state.lambdaAuto) $('#lambda').value = lam;
+    renderAll();
+  }
+
+  // ---------- helpers ----------
+  const ns = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs = {}, text) => { const e = document.createElementNS(ns, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; };
+  function best(ids) { let b = null; ids.forEach(id => { const m = result.summary[id].auc.mean; if (!b || m > b.m) b = { id, m, s: result.summary[id].auc.std }; }); return b; }
+
+  function renderAll() { renderHeadline(); renderBars(); renderFocus(); renderPaper(); }
+
+  function renderHeadline() {
+    const bc = best(Engine.CLASSICAL.map(c => c.id));
+    const bqPaper = best(Engine.Q_CONFIGS.filter(q => !q.future).map(q => q.id));
+    const bt = { id: 'tuned', m: result.summary.tuned.auc.mean, s: result.summary.tuned.auc.std };
+    const bq = bt.m > bqPaper.m ? bt : bqPaper;
+    const gap = bc.m - bq.m;
+    const ahead = gap >= 0;
+    $('#headline').innerHTML = `Best classical: <b class="c-classical">${NAMES[bc.id]} ${fmt(bc.m)}</b>. Best paper-configuration quantum kernel: <b class="c-quantum">${NAMES[bqPaper.id]} ${fmt(bqPaper.m)}</b>. The bandwidth-scaled kernel reaches <b class="c-quantum">${fmt(bt.m)}</b>, ${ahead ? `${fmt(Math.abs(bc.m - bt.m))} below` : `${fmt(Math.abs(bc.m - bt.m))} above`} the best classical detector.`;
+    $('#lsC').innerHTML = `${fmt(bc.m)}<small>${NAMES[bc.id]}</small>`;
+    $('#lsQ').innerHTML = `${fmt(bq.m)}<small>${bq.id === 'tuned' ? 'bandwidth-scaled' : NAMES[bq.id]}</small>`;
+    $('#lsG').innerHTML = `${gap >= 0 ? '−' : '+'}${fmt(Math.abs(gap))}<small>${state.regime === 'ring' ? 'ring' : 'Gaussian'}, ${state.k} qubits</small>`;
+  }
+
+  function renderBars() {
+    const box = $('#bars'); box.innerHTML = '';
+    const pv = (PAPER[`${state.regime}-${state.k}`] || { v: {} }).v;
+    const groups = [Engine.CLASSICAL.map(c => c.id), Engine.Q_CONFIGS.map(q => q.id)].map(g => g.slice().sort((a, b) => result.summary[b].auc.mean - result.summary[a].auc.mean));
+    const rows = groups[0].concat(groups[1]);
+    const W = Math.max(400, Math.round(box.clientWidth || 760)), rowH = 31, top = 8, left = W < 600 ? 150 : 210, right = W < 600 ? 78 : 92, plotW = W - left - right, H = top + rows.length * rowH + 30 + 14;
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', role: 'img', 'aria-label': 'ROC-AUC per detector' });
+    const defs = el('defs'); const pat = el('pattern', { id: 'hatch', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' });
+    pat.appendChild(el('rect', { width: 6, height: 6, fill: '#F5A57F' })); pat.appendChild(el('rect', { width: 3, height: 6, fill: C.q })); defs.appendChild(pat); svg.appendChild(defs);
+    const x = v => left + v * plotW;
+    [0, .25, .5, .75, 1].forEach(t => {
+      svg.appendChild(el('line', { x1: x(t), x2: x(t), y1: top - 4, y2: H - 30, stroke: t === .5 ? C.muted : C.line, 'stroke-dasharray': t === .5 ? '4 4' : '', 'stroke-width': 1 }));
+      svg.appendChild(el('text', { x: x(t), y: H - 12, 'text-anchor': 'middle', 'font-size': 11, fill: C.muted, 'font-family': 'Geist Mono, monospace' }, t.toFixed(2)));
+    });
+    rows.forEach((id, i) => {
+      const y = top + i * rowH + (i >= groups[0].length ? 10 : 0);
+      const s = result.summary[id].auc, q = isQ(id), fut = id === 'tuned', foc = id === state.focus;
+      const g = el('g', { class: 'bars-row', tabindex: 0, role: 'button', 'aria-label': `${NAMES[id]} ${fmt(s.mean)}` });
+      g.appendChild(el('rect', { class: 'hit', x: 0, y: y - 3, width: W, height: rowH - 2, fill: foc ? 'rgba(26,25,21,.05)' : 'transparent', rx: 6 }));
+      g.appendChild(el('text', { x: left - 12, y: y + 15, 'text-anchor': 'end', 'font-size': W < 600 ? 11.5 : 13, fill: C.ink, 'font-weight': foc ? 600 : 400 }, NAMES[id]));
+      g.appendChild(el('rect', { x: left, y: y + 3, width: Math.max(1, s.mean * plotW), height: rowH - 12, rx: 3, fill: fut ? 'url(#hatch)' : q ? C.q : C.cls }));
+      const lo = Math.max(0, s.mean - s.std), hi = Math.min(1, s.mean + s.std);
+      g.appendChild(el('line', { x1: x(lo), x2: x(hi), y1: y + 3 + (rowH - 12) / 2, y2: y + 3 + (rowH - 12) / 2, stroke: C.ink2, 'stroke-width': 1.3 }));
+      [lo, hi].forEach(v => g.appendChild(el('line', { x1: x(v), x2: x(v), y1: y + 8, y2: y + rowH - 14, stroke: C.ink2, 'stroke-width': 1.3 })));
+      if (pv[id]) {
+        const pxv = x(pv[id][0]);
+        g.appendChild(el('line', { x1: pxv, x2: pxv, y1: y, y2: y + rowH - 6, stroke: C.ink, 'stroke-width': 2 }));
+        const tt = el('title', {}, `Paper: ${pv[id][0].toFixed(3)} ± ${pv[id][1].toFixed(3)}`); g.appendChild(tt);
+      }
+      g.appendChild(el('text', { x: W - right + 10, y: y + 15, 'font-size': 12, fill: C.ink, 'font-family': 'Geist Mono, monospace' }, `${fmt(s.mean)} ±${fmt(s.std, 2).slice(1)}`));
+      g.addEventListener('click', () => { state.focus = id; focusSel.value = id; renderBars(); renderFocus(); });
+      g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); g.dispatchEvent(new Event('click')); } });
+      svg.appendChild(g);
+    });
+    const sepY = top + groups[0].length * rowH + 3;
+    svg.appendChild(el('line', { x1: 0, x2: W, y1: sepY, y2: sepY, stroke: C.line }));
+    box.appendChild(svg);
+  }
+
+  function renderFocus() { renderROC(); renderMap(); renderGram(); }
+
+  function renderROC() {
+    const k = result.keep, f = state.focus;
+    const oppIds = isQ(f) ? Engine.CLASSICAL.map(c => c.id) : Engine.Q_CONFIGS.map(q => q.id);
+    const opp = best(oppIds).id;
+    const S = 300, p = 34, svg = el('svg', { viewBox: `0 0 ${S + p + 10} ${S + p + 10}`, width: '100%', role: 'img', 'aria-label': 'ROC curves' });
+    const X = v => p + v * S, Y = v => 10 + (1 - v) * S;
+    [0, .25, .5, .75, 1].forEach(t => {
+      svg.appendChild(el('line', { x1: X(t), x2: X(t), y1: Y(0), y2: Y(1), stroke: C.line }));
+      svg.appendChild(el('line', { x1: X(0), x2: X(1), y1: Y(t), y2: Y(t), stroke: C.line }));
+      svg.appendChild(el('text', { x: X(t), y: Y(0) + 16, 'text-anchor': 'middle', 'font-size': 11.5, fill: C.muted, 'font-family': 'Geist Mono, monospace' }, t));
+      svg.appendChild(el('text', { x: p - 6, y: Y(t) + 3, 'text-anchor': 'end', 'font-size': 11.5, fill: C.muted, 'font-family': 'Geist Mono, monospace' }, t));
+    });
+    svg.appendChild(el('line', { x1: X(0), y1: Y(0), x2: X(1), y2: Y(1), stroke: C.muted, 'stroke-dasharray': '4 4' }));
+    const curve = (id, color, w) => {
+      const pts = Engine.rocCurve(k[id].scores, k.y);
+      svg.appendChild(el('polyline', { points: pts.map(([a, b]) => `${X(a)},${Y(b)}`).join(' '), fill: 'none', stroke: color, 'stroke-width': w, 'stroke-linejoin': 'round' }));
+    };
+    curve(opp, isQ(opp) ? C.q : C.cls, 1.6);
+    curve(f, isQ(f) ? C.qDeep : C.clsDeep, 2.6);
+    const box = $('#roc'); box.innerHTML = ''; box.appendChild(svg);
+    const auc = id => { const pts = Engine.rocCurve(k[id].scores, k.y); let a = 0; for (let i = 1; i < pts.length; i++) a += (pts[i][0] - pts[i - 1][0]) * (pts[i][1] + pts[i - 1][1]) / 2; return a; };
+    $('#rocSub').innerHTML = `Seed 0. <b style="color:${isQ(f) ? C.qDeep : C.clsDeep}">${NAMES[f]}</b> (${fmt(auc(f))}) against <span style="color:${isQ(opp) ? C.q : C.cls}">${NAMES[opp]}</span> (${fmt(auc(opp))}).`;
+  }
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function hex(h) { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  function ramp(stops, t) {
+    t = Math.min(1, Math.max(0, t)); const seg = (stops.length - 1) * t, i = Math.min(stops.length - 2, Math.floor(seg)), f = seg - i;
+    const a = hex(stops[i]), b = hex(stops[i + 1]); return [0, 1, 2].map(j => Math.round(lerp(a[j], b[j], f)));
+  }
+
+  function renderMap() {
+    const k = result.keep, f = state.focus, m = k[f].model;
+    const pts = k.Xtr.concat(k.Xte);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    pts.forEach(p => { x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); });
+    const padX = (x1 - x0) * .12, padY = (y1 - y0) * .12; x0 -= padX; x1 += padX; y0 -= padY; y1 += padY;
+    const G = 64, rows = [];
+    for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) { const r = new Array(state.k).fill(0); r[0] = lerp(x0, x1, (i + .5) / G); r[1] = lerp(y1, y0, (j + .5) / G); rows.push(r); }
+    const sc = m.score(rows), sorted = sc.slice().sort((a, b) => a - b);
+    const lo = sorted[Math.floor(sorted.length * .03)], hi = sorted[Math.floor(sorted.length * .97)];
+    const stops = isQ(f) ? ['#FDFBF7', '#FBE2D4', '#EE9A6E', '#C24A17', '#5E2209'] : ['#FDFBF7', '#DCE6F7', '#7FA6E3', '#2B6BCF', '#0E2A55'];
+    const off = document.createElement('canvas'); off.width = G; off.height = G;
+    const octx = off.getContext('2d'), img = octx.createImageData(G, G);
+    sc.forEach((v, n) => { const c = ramp(stops, (v - lo) / (hi - lo || 1)); img.data.set([c[0], c[1], c[2], 255], n * 4); });
+    octx.putImageData(img, 0, 0);
+    const cv = $('#map'), ctx = cv.getContext('2d'), S = cv.width;
+    ctx.clearRect(0, 0, S, S); ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.drawImage(off, 0, 0, S, S);
+    // default-threshold boundary
+    ctx.fillStyle = 'rgba(26,25,21,.75)';
+    const thr = m.threshold, cell = S / G;
+    for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {
+      const s0 = sc[j * G + i] > thr;
+      if (i < G - 1 && s0 !== (sc[j * G + i + 1] > thr) && (j % 2 === 0)) ctx.fillRect((i + 1) * cell - 1, j * cell, 2, cell);
+      if (j < G - 1 && s0 !== (sc[(j + 1) * G + i] > thr) && (i % 2 === 0)) ctx.fillRect(i * cell, (j + 1) * cell - 1, cell, 2);
+    }
+    const P = p => [(p[0] - x0) / (x1 - x0) * S, (y1 - p[1]) / (y1 - y0) * S];
+    ctx.fillStyle = 'rgba(71,68,61,.55)';
+    k.Xtr.forEach(p => { const [a, b] = P(p); ctx.beginPath(); ctx.arc(a, b, 2.6, 0, 7); ctx.fill(); });
+    k.Xte.forEach((p, i) => {
+      const [a, b] = P(p);
+      if (k.y[i]) { ctx.strokeStyle = C.attack; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(a - 4, b - 4); ctx.lineTo(a + 4, b + 4); ctx.moveTo(a + 4, b - 4); ctx.lineTo(a - 4, b + 4); ctx.stroke(); }
+      else { ctx.fillStyle = '#fff'; ctx.strokeStyle = C.ink; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.arc(a, b, 3.8, 0, 7); ctx.fill(); ctx.stroke(); }
+    });
+    $('#mapSub').textContent = `${NAMES[f]}, seed 0. Darker means more anomalous.` + (state.k > 2 ? ' Slice through PC3 = PC4 = 0; points are projected.' : '');
+  }
+
+  function drawGram(cv, K, stops) {
+    const n = 40, ctx = cv.getContext('2d'), img = ctx.createImageData(n, n);
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { const c = ramp(stops, K[i][j]); img.data.set([c[0], c[1], c[2], 255], (i * n + j) * 4); }
+    ctx.putImageData(img, 0, 0);
+  }
+  function offDiag(K) { const v = []; for (let i = 0; i < K.length; i++) for (let j = i + 1; j < K.length; j++) v.push(K[i][j]); const m = v.reduce((s, a) => s + a, 0) / v.length; return { m, sd: Math.sqrt(v.reduce((s, a) => s + (a - m) ** 2, 0) / v.length) }; }
+  function renderGram() {
+    const k = result.keep, qid = isQ(state.focus) ? state.focus : 'tuned';
+    const Kc = k.rbf.model.K, Kq = k[qid].model.K;
+    drawGram($('#gramC'), Kc, ['#FDFBF7', '#DCE6F7', '#7FA6E3', '#2B6BCF', '#0E2A55']);
+    drawGram($('#gramQ'), Kq, ['#FDFBF7', '#FBE2D4', '#EE9A6E', '#C24A17', '#5E2209']);
+    const sub = K => K.slice(0, 50).map(r => r.slice(0, 50));
+    const ec = Engine.effectiveRank(sub(Kc)), eq = Engine.effectiveRank(sub(Kq));
+    const oc = offDiag(Kc), oq = offDiag(Kq);
+    $('#gramCcap').innerHTML = `<span class="c-classical">RBF kernel</span><br>effective rank <b>${ec.erank.toFixed(1)}</b> · off-diagonal ${oc.m.toFixed(2)} ± ${oc.sd.toFixed(2)}`;
+    $('#gramQcap').innerHTML = `<span class="c-quantum">${NAMES[qid]}</span><br>effective rank <b>${eq.erank.toFixed(1)}</b> · off-diagonal ${oq.m.toFixed(2)} ± ${oq.sd.toFixed(2)}`;
+    const bound = 4 ** state.k;
+    $('#gramNote').textContent = `Effective rank over 50 reference rows. A ${state.k}-qubit fidelity kernel can never exceed rank ${bound} (d² = 4^${state.k}); the brief measured 7.1 for its 2-qubit run. A narrow off-diagonal spread means the kernel gives the SVM little contrast to work with.`;
+  }
+
+  function renderPaper() {
+    const key = `${state.regime}-${state.k}`, pp = PAPER[key];
+    const t = $('#ptable'); t.innerHTML = '<tr><th>Detector</th><th class="n">Paper</th><th class="n">Live</th><th class="n">Δ</th></tr>';
+    const ids = Engine.CLASSICAL.map(c => c.id).concat(Engine.Q_CONFIGS.map(q => q.id));
+    ids.forEach(id => {
+      const live = result.summary[id].auc.mean, pv = pp.v[id];
+      const tr = document.createElement('tr'); tr.className = isQ(id) ? 'q' : 'c';
+      tr.innerHTML = `<td>${NAMES[id]}${id === 'tuned' ? '<span class="pill">future work</span>' : ''}</td><td class="n">${pv ? pv[0].toFixed(3) : '<span style="color:var(--muted)">not run</span>'}</td><td class="n">${fmt(live)}</td><td class="n" style="color:var(--muted)">${pv ? ((live - pv[0] >= 0 ? '+' : '−') + Math.abs(live - pv[0]).toFixed(3)) : ''}</td>`;
+      t.appendChild(tr);
+    });
+    $('#paperSub').textContent = `${state.regime === 'ring' ? 'Ring manifold' : 'Gaussian shift'}, ${state.k} qubits: the paper's ROC-AUC next to this tab's live rerun.`;
+    $('#paperSrc').textContent = 'Source: ' + pp.src;
+  }
+
+  // ---------- latency ----------
+  function renderLatChart() {
+    const W = 460, rowH = 36, left = 128, right = 66, H = LAT.length * rowH + 40;
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', role: 'img', 'aria-label': 'Median latency per sample, log scale' });
+    const lx = v => left + (Math.log10(v) - 1) / 5 * (W - left - right);
+    for (let e = 1; e <= 6; e++) {
+      svg.appendChild(el('line', { x1: lx(10 ** e), x2: lx(10 ** e), y1: 0, y2: H - 28, stroke: C.line }));
+      svg.appendChild(el('text', { x: lx(10 ** e), y: H - 10, 'text-anchor': 'middle', 'font-size': 10.5, fill: C.muted, 'font-family': 'Geist Mono, monospace' }, `10${'⁰¹²³⁴⁵⁶'[e]}`));
+    }
+    LAT.forEach((d, i) => {
+      const y = i * rowH + 6;
+      svg.appendChild(el('text', { x: left - 10, y: y + 15, 'text-anchor': 'end', 'font-size': 13.5, fill: C.ink }, d.name));
+      svg.appendChild(el('rect', { x: lx(10), y: y + 3, width: lx(d.us) - lx(10), height: rowH - 14, rx: 3, fill: d.kind === 'q' ? C.q : C.cls }));
+      svg.appendChild(el('text', { x: lx(d.us) + 6, y: y + 15, 'font-size': 12.5, fill: C.ink2, 'font-family': 'Geist Mono, monospace' }, d.us.toLocaleString('en-US')));
+    });
+    svg.appendChild(el('text', { x: W - right, y: H - 10, 'text-anchor': 'end', 'font-size': 10.5, fill: C.muted }, 'µs per sample'));
+    $('#latChart').appendChild(svg);
+  }
+  const lanes = $('#lanes');
+  LAT.forEach(d => {
+    const div = document.createElement('div'); div.className = `lane ${d.kind}`; div.id = 'lane-' + d.id;
+    div.innerHTML = `<div class="nm">${d.name}<small>${d.us.toLocaleString('en-US')} µs / sample</small></div><div class="track"><i></i></div><div class="ct"><b>0</b> / <span class="tot">100</span></div>`;
+    lanes.appendChild(div);
+  });
+  let raf = null, raceStart = 0;
+  function resetRace() {
+    cancelAnimationFrame(raf); raf = null; $('#raceGo').textContent = 'Start race';
+    LAT.forEach(d => { const l = $('#lane-' + d.id); l.classList.remove('done'); l.querySelector('.track i').style.width = '0%'; l.querySelector('b').textContent = '0'; l.querySelector('.tot').textContent = state.packets.toLocaleString('en-US'); l.querySelector('small').textContent = `${d.us.toLocaleString('en-US')} µs / sample`; });
+    $('#raceClock').textContent = 'simulated time 0.000 s';
+  }
+  function fmtT(s) { return s < 1 ? (s * 1000).toFixed(2) + ' ms' : s.toFixed(2) + ' s'; }
+  function tick(now) {
+    const sim = (now - raceStart) / 1000 * state.speed;
+    let all = true;
+    LAT.forEach(d => {
+      const total = d.us * state.packets / 1e6, prog = Math.min(1, sim / total), l = $('#lane-' + d.id);
+      l.querySelector('.track i').style.width = (prog * 100) + '%';
+      l.querySelector('b').textContent = Math.floor(prog * state.packets).toLocaleString('en-US');
+      if (prog >= 1 && !l.classList.contains('done')) { l.classList.add('done'); l.querySelector('small').textContent = `finished in ${fmtT(total)}`; }
+      if (prog < 1) all = false;
+    });
+    $('#raceClock').textContent = `simulated time ${sim.toFixed(3)} s`;
+    if (!all) raf = requestAnimationFrame(tick); else { raf = null; $('#raceGo').textContent = 'Run again'; }
+  }
+  $('#raceGo').addEventListener('click', () => { resetRace(); raceStart = performance.now(); $('#raceGo').textContent = 'Racing…'; raf = requestAnimationFrame(tick); });
+  $('#raceReset').addEventListener('click', resetRace);
+
+  // ---------- gallery ----------
+  const caps = { cl_scores_ae: 'Shallow autoencoder', cl_scores_if: 'Isolation Forest', cl_scores_lof: 'Local Outlier Factor', cl_scores_ocsvm: 'One-class SVM (RBF)' };
+  $('#galTabs').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    document.querySelectorAll('#galTabs button').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+    $('#galMain').src = `assets/${b.dataset.img}.webp`;
+    $('#galCap').textContent = `${caps[b.dataset.img]}: score distribution and ROC curve on nbaiot_demo.`;
+  });
+  const lb = $('#lightbox');
+  document.querySelectorAll('.shot img').forEach(img => img.addEventListener('click', () => { $('#lbImg').src = img.src; $('#lbImg').alt = img.alt; lb.showModal(); }));
+  $('#lbClose').addEventListener('click', () => lb.close());
+  lb.addEventListener('click', e => { if (e.target === lb) lb.close(); });
+
+  // ---------- hero canvas ----------
+  const hc = $('#heroCanvas'), reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const hr = Engine.rng(11), benign = Array.from({ length: 150 }, () => ({ a: hr() * 6.283, j: (hr() - .5) * .07 })), atk = Array.from({ length: 34 }, () => ({ a: hr() * 6.283, j: (hr() - .5) * .07 }));
+  function drawHero(t) {
+    const dpr = Math.min(2, devicePixelRatio || 1), w = hc.clientWidth, h = hc.clientHeight;
+    if (hc.width !== w * dpr) { hc.width = w * dpr; hc.height = h * dpr; }
+    const ctx = hc.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    const cx = w / 2, cy = h / 2 - 4, R = Math.min(w, h) * .23;
+    // similarity field: soft halo around the benign ring
+    const g = ctx.createRadialGradient(cx, cy, R * .55, cx, cy, R * 1.45);
+    g.addColorStop(0, 'rgba(43,107,207,0)'); g.addColorStop(.45, 'rgba(43,107,207,.10)'); g.addColorStop(.62, 'rgba(43,107,207,.03)'); g.addColorStop(1, 'rgba(43,107,207,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, R * 1.5, 0, 7); ctx.fill();
+    ctx.setLineDash([3, 5]); ctx.strokeStyle = 'rgba(26,25,21,.18)'; ctx.lineWidth = 1;
+    [1, 1.6].forEach(r => { ctx.beginPath(); ctx.arc(cx, cy, R * r, 0, 7); ctx.stroke(); }); ctx.setLineDash([]);
+    const rot = t * .00006;
+    ctx.fillStyle = C.ink;
+    benign.forEach(p => { const a = p.a + rot, r = R * (1 + p.j); ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 2.2, 0, 7); ctx.fill(); });
+    ctx.strokeStyle = C.attack; ctx.lineWidth = 1.6;
+    atk.forEach(p => { const a = p.a - rot * 1.4, r = R * (1.6 + p.j), x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r; ctx.beginPath(); ctx.moveTo(x - 3.5, y - 3.5); ctx.lineTo(x + 3.5, y + 3.5); ctx.moveTo(x + 3.5, y - 3.5); ctx.lineTo(x - 3.5, y + 3.5); ctx.stroke(); });
+    // probe
+    const pa = t * .0004, pr = R * (1.3 + .3 * Math.sin(t * .0007)), px = cx + Math.cos(pa) * pr, py = cy + Math.sin(pa) * pr;
+    ctx.strokeStyle = C.q; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.arc(px, py, 9, 0, 7); ctx.stroke();
+    ctx.fillStyle = C.q; ctx.beginPath(); ctx.arc(px, py, 2.4, 0, 7); ctx.fill();
+    ctx.font = '11px Geist Mono, monospace'; ctx.fillStyle = C.qDeep;
+    const dist = Math.abs(pr / R - 1), k = Math.exp(-dist * dist / .045);
+    ctx.fillText(`k(x, benign) = ${k.toFixed(2)}`, Math.min(px + 14, w - 150), py - 12);
+    if (!reduce) requestAnimationFrame(drawHero);
+  }
+  requestAnimationFrame(drawHero);
+
+  // ---------- reveal ----------
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .12 });
+  document.querySelectorAll('.reveal').forEach(n => io.observe(n));
+
+  let rz = null; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => result && renderBars(), 150); });
+  syncSegs(); renderLatChart(); resetRace(); schedule();
+})();
+</script>
+</body>
+</html>
